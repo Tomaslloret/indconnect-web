@@ -16,6 +16,9 @@
   }/*EDITMODE-END*/;
 </script>
 
+<script src="auth.js"></script>
+<script src="db.js"></script>
+
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
@@ -151,37 +154,93 @@
 <script type="text/babel" src="tweaks.jsx"></script>
 
 <script type="text/babel" data-presets="env,react">
-const { useState } = React;
+const { useState, useEffect } = React;
 
 const SIDE_NAV = [
-  { id:'overview', label:'Resumen', icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
-  { id:'pubs',     label:'Mis publicaciones', count:5, icon:'M3 4h18v16H3zM3 8h18M8 4v16' },
-  { id:'invest',   label:'Mis inversiones',  count:3, icon:'M3 17L9 11l4 4 8-8' },
-  { id:'messages', label:'Consultas', count:12, icon:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
-  { id:'rep',      label:'Mi reputación', icon:'M12 2L14 8L20 10L14 12L12 18L10 12L4 10L10 8L12 2Z' },
-  { id:'alerts',   label:'Alertas IA',     count:4, icon:'M12 2L13.5 8L20 9L15 13L16.5 20L12 16.5L7.5 20L9 13L4 9L10.5 8L12 2z' },
-  { id:'saved',    label:'Guardadas', icon:'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z' },
-  { id:'settings', label:'Configuración', icon:'M12 15a3 3 0 100-6 3 3 0 000 6z' },
+  { id:'overview', label:'Resumen',            icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
+  { id:'pubs',     label:'Mis publicaciones',  icon:'M3 4h18v16H3zM3 8h18M8 4v16' },
+  { id:'invest',   label:'Mis inversiones',    icon:'M3 17L9 11l4 4 8-8' },
+  { id:'received', label:'Consultas recibidas',icon:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
+  { id:'sent',     label:'Consultas enviadas', icon:'M3 10h11M9 21V3m0 0L3 9m6-6l6 6' },
+  { id:'saved',    label:'Guardadas',          icon:'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z' },
 ];
 
 function SparkLine({ vals, color }) {
+  if (!vals || vals.length < 2) return null;
   const max = Math.max(...vals), min = Math.min(...vals);
+  const range = max - min || 1;
   const pts = vals.map((v,i)=> {
     const x = (i / (vals.length-1)) * 80;
-    const y = 30 - ((v-min)/(max-min)) * 26 - 2;
+    const y = 30 - ((v-min)/range) * 26 - 2;
     return `${x},${y}`;
   }).join(' ');
+  const lastY = 30 - ((vals[vals.length-1]-min)/range)*26 - 2;
   return (
     <svg className="spark" viewBox="0 0 80 30">
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5"/>
-      <circle cx={80} cy={30 - ((vals[vals.length-1]-min)/(max-min))*26 - 2} r="2.5" fill={color}/>
+      <circle cx={80} cy={lastY} r="2.5" fill={color}/>
     </svg>
+  );
+}
+
+function EmptyState({ msg, cta, href }) {
+  return (
+    <div style={{padding:'32px 24px',textAlign:'center',color:'var(--ic-text-2)'}}>
+      <div style={{fontSize:14}}>{msg}</div>
+      {cta && <a href={href} className="ic-btn ic-btn-primary ic-btn-sm" style={{marginTop:12,display:'inline-flex'}}>{cta}</a>}
+    </div>
   );
 }
 
 function Dashboard() {
   const [t] = useIndTweaks();
   const [tab, setTab] = useState('overview');
+  const [user, setUser] = useState(null);
+  const [myProps, setMyProps]       = useState([]);
+  const [investments, setInvestments] = useState([]);
+  const [inquiriesIn, setInquiriesIn] = useState([]);
+  const [inquiriesOut, setInquiriesOut] = useState([]);
+  const [favorites, setFavorites]   = useState([]);
+
+  useEffect(() => {
+    IndAuth.requireAuth();
+    const u = IndAuth.getCurrentUser();
+    if (!u) return;
+    setUser(u);
+    try { setMyProps(IndDB.getUserProperties(u.id) || []); } catch(e){}
+    try { setInvestments(IndDB.getUserInvestments(u.id) || []); } catch(e){}
+    try { setInquiriesIn(IndDB.getInquiriesReceived(u.id) || []); } catch(e){}
+    try { setInquiriesOut(IndDB.getInquiriesSent(u.id) || []); } catch(e){}
+    try {
+      const favIds = IndDB.getFavorites(u.id) || [];
+      const favProps = favIds.map(id => { try { return IndDB.getProperty(id); } catch(e){ return null; } }).filter(Boolean);
+      setFavorites(favProps);
+    } catch(e){}
+  }, []);
+
+  const handleDelete = (propId) => {
+    if (!user) return;
+    if (!window.confirm('¿Eliminar esta propiedad?')) return;
+    try {
+      IndDB.deleteProperty(propId, user.id);
+      setMyProps(prev => prev.filter(p => p.id !== propId));
+    } catch(e) { alert('No se pudo eliminar.'); }
+  };
+
+  const handleLogout = () => { IndAuth.logout(); window.location.href = 'index.html'; };
+
+  const initials = user ? (user.name || user.email).split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase() : '??';
+  const totalViews = myProps.reduce((s,p) => s + (p.views||0), 0);
+  const totalInquiries = inquiriesIn.length;
+  const totalInvested = investments.reduce((s,inv) => s + (inv.amount||0), 0);
+
+  const navCounts = {
+    pubs: myProps.length,
+    invest: investments.length,
+    received: inquiriesIn.length,
+    sent: inquiriesOut.length,
+    saved: favorites.length,
+  };
 
   return (
     <div className="ic-page" data-screen-label="06 Dashboard">
@@ -191,219 +250,243 @@ function Dashboard() {
         <aside className="dash-side">
           <div className="user">
             <div style={{display:'flex',gap:12,alignItems:'center'}}>
-              <div className="ic-avatar">MF</div>
+              <div className="ic-avatar">{initials}</div>
               <div>
-                <div style={{fontWeight:600,fontSize:14}}>M. Fernández</div>
-                <div style={{fontSize:11.5,color:'var(--ic-text-2)'}}>Vendedor verificado</div>
+                <div style={{fontWeight:600,fontSize:14}}>{user ? (user.name || user.email) : '...'}</div>
+                <div style={{fontSize:11.5,color:'var(--ic-text-2)'}}>{user ? user.company || 'Usuario' : ''}</div>
               </div>
-            </div>
-            <div style={{display:'flex',gap:6,marginTop:10}}>
-              <VerifiedBadge/>
-              <Reputation rating={4.8} count={21} compact/>
             </div>
           </div>
 
           {SIDE_NAV.map(n => (
-            <a key={n.id} className={"side-link " + (tab===n.id?"active":"")} onClick={()=>setTab(n.id)}>
+            <a key={n.id} className={"side-link " + (tab===n.id?"active":"")} onClick={()=>setTab(n.id)} style={{cursor:'pointer'}}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d={n.icon} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round"/>
               </svg>
               {n.label}
-              {n.count && <span className="badge">{n.count}</span>}
+              {navCounts[n.id] > 0 && <span className="badge">{navCounts[n.id]}</span>}
             </a>
           ))}
 
           <a className="ic-btn ic-btn-primary" href="publish.html" style={{justifyContent:'center',marginTop:20,width:'100%'}}>
             + Publicar propiedad
           </a>
+          <button className="ic-btn ic-btn-ghost" style={{justifyContent:'center',marginTop:8,width:'100%'}} onClick={handleLogout}>
+            Cerrar sesión
+          </button>
         </aside>
 
         <main className="dash-main">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:24,flexWrap:'wrap',gap:12}}>
             <div>
-              <div className="ic-eyebrow" style={{marginBottom:8}}>Resumen · últimos 30 días</div>
-              <h1 style={{margin:0,fontSize:28,fontWeight:600,letterSpacing:'-.025em'}}>Hola, Mariano</h1>
-            </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="ic-btn ic-btn-secondary ic-btn-sm">Últimos 30d ▾</button>
-              <button className="ic-btn ic-btn-secondary ic-btn-sm">Exportar</button>
+              <div className="ic-eyebrow" style={{marginBottom:8}}>Resumen</div>
+              <h1 style={{margin:0,fontSize:28,fontWeight:600,letterSpacing:'-.025em'}}>
+                Hola, {user ? (user.name || '').split(' ')[0] || 'Usuario' : '...'}
+              </h1>
             </div>
           </div>
 
-          {/* AI banner */}
-          <div className="ai-banner">
-            <div style={{width:44,height:44,borderRadius:10,background:'rgba(201,168,76,.18)',color:'var(--ic-gold)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,position:'relative'}}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor"/></svg>
-            </div>
-            <div style={{flex:1,position:'relative'}}>
-              <div className="ic-mono" style={{color:'var(--ic-gold)',fontSize:10}}>ALERTA IA · HOY</div>
-              <div style={{fontSize:15,marginTop:6,lineHeight:1.5}}>
-                Apareció una nueva propiedad que coincide con tu búsqueda guardada <b>"Galpón Puerto Ing. White"</b>. Además, tu zona de interés <b>subió +4.2% en 6 meses</b>.
+          {/* ── OVERVIEW ── */}
+          {tab === 'overview' && (
+            <>
+              <div className="stat-cards">
+                <div className="stat-card">
+                  <div className="k">Vistas (todas pubs)</div>
+                  <div className="v ic-num">{totalViews.toLocaleString()}</div>
+                </div>
+                <div className="stat-card">
+                  <div className="k">Consultas recibidas</div>
+                  <div className="v ic-num">{totalInquiries}</div>
+                </div>
+                <div className="stat-card">
+                  <div className="k">Invertido total</div>
+                  <div className="v ic-num">USD {totalInvested.toLocaleString()}</div>
+                </div>
+                <div className="stat-card">
+                  <div className="k">Publicaciones</div>
+                  <div className="v ic-num">{myProps.length}</div>
+                </div>
               </div>
-            </div>
-            <a className="ic-btn ic-btn-sm" href="search.html" style={{background:'var(--ic-gold)',color:'#3a2a07'}}>
-              Ver propiedad →
-            </a>
-          </div>
 
-          {/* Stat cards */}
-          <div className="stat-cards">
-            <div className="stat-card">
-              <div className="k">Vistas (todas pubs)</div>
-              <div className="v ic-num">3.482</div>
-              <div className="delta up">▲ 12.4% vs mes anterior</div>
-            </div>
-            <div className="stat-card">
-              <div className="k">Consultas</div>
-              <div className="v ic-num">47</div>
-              <div className="delta up">▲ 8 nuevas hoy</div>
-            </div>
-            <div className="stat-card">
-              <div className="k">Invertido total</div>
-              <div className="v ic-num">USD 14.500</div>
-              <div className="delta up">▲ +$840 en retorno</div>
-            </div>
-            <div className="stat-card">
-              <div className="k">Reputación</div>
-              <div style={{display:'flex',alignItems:'center',gap:8,marginTop:8}}>
-                <Stars value={4.8} size={18}/>
-                <span className="ic-num" style={{fontWeight:600,fontSize:22}}>4.8</span>
+              {/* Quick recent inquiries */}
+              <div className="panel">
+                <div className="panel-hd">
+                  <h3>Consultas recientes</h3>
+                  <button className="ic-btn ic-btn-ghost ic-btn-sm" onClick={()=>setTab('received')}>Ver todas →</button>
+                </div>
+                <div className="panel-body">
+                  {inquiriesIn.length === 0
+                    ? <EmptyState msg="No tenés consultas recibidas todavía."/>
+                    : inquiriesIn.slice(0,4).map((m,i)=>(
+                        <div key={i} className="alert-row">
+                          <div className="ic-avatar" style={{width:36,height:36,fontSize:12}}>
+                            {(m.fromName||'?').split(' ').map(w=>w[0]).slice(0,2).join('')}
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:13.5,fontWeight:600}}>{m.fromName || m.fromEmail}</div>
+                            <div style={{fontSize:11.5,color:'var(--ic-text-2)',fontFamily:'var(--ic-mono)',marginTop:1}}>{m.propTitle}</div>
+                            <div style={{fontSize:13,color:'var(--ic-text)',marginTop:6,lineHeight:1.4}}>"{m.message}"</div>
+                          </div>
+                        </div>
+                      ))
+                  }
+                </div>
               </div>
-              <div className="delta" style={{color:'var(--ic-text-2)'}}>21 operaciones cerradas</div>
-            </div>
-          </div>
 
-          {/* Mis publicaciones */}
-          <div className="panel">
-            <div className="panel-hd">
-              <h3>Mis publicaciones activas</h3>
-              <div style={{display:'flex',gap:8}}>
-                <button className="ic-btn ic-btn-ghost ic-btn-sm">Ver todas (5)</button>
+              <div style={{marginTop:24}}>
+                <div className="empty-cta">
+                  <div style={{flex:1}}>
+                    <h4 style={{margin:0,fontSize:15,fontWeight:600}}>Verificación premium pendiente</h4>
+                    <p style={{margin:'6px 0 0',fontSize:13,color:'var(--ic-text-2)'}}>Completá la verificación premium para obtener el badge ★ Premium.</p>
+                  </div>
+                  <button className="ic-btn ic-btn-gold">Empezar verificación →</button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── MIS PUBLICACIONES ── */}
+          {tab === 'pubs' && (
+            <div className="panel">
+              <div className="panel-hd">
+                <h3>Mis publicaciones ({myProps.length})</h3>
                 <a href="publish.html" className="ic-btn ic-btn-primary ic-btn-sm">+ Nueva</a>
               </div>
-            </div>
-            <div className="panel-body">
-              {[
-                { title:"Galpón 1.800 m² · acceso camiones", loc:"Puerto Ing. White", price:"USD 680.000", views:1247, consultas:14, days:6, ai:true },
-                { title:"Nave 3.200 m² · oficinas + planta",  loc:"Parque Industrial", price:"USD 1.450.000", views:842,  consultas:11, days:18, ai:false },
-                { title:"Galpón 920 m² · ideal e-commerce",   loc:"Parque Industrial", price:"USD 4.800/mes", views:1393, consultas:22, days:24, ai:true },
-              ].map((p,i)=>(
-                <div key={i} className="listing-row">
-                  <div className="thumb"/>
-                  <div>
-                    <div style={{fontWeight:600,fontSize:14,marginBottom:2}}>{p.title}</div>
-                    <div style={{fontSize:12,color:'var(--ic-text-2)'}}>{p.loc} · publicado hace {p.days} días</div>
-                    {p.ai && <div style={{marginTop:6}}><AILabel>IA destaca</AILabel></div>}
-                  </div>
-                  <div className="stat"><div className="v ic-num">{p.views}</div><div className="k">VISTAS</div></div>
-                  <div className="stat"><div className="v ic-num">{p.consultas}</div><div className="k">CONSULTAS</div></div>
-                  <div className="stat ic-num" style={{fontWeight:600,fontSize:15}}>{p.price}</div>
-                  <button className="ic-btn ic-btn-secondary ic-btn-sm">Editar</button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Inversiones */}
-          <div className="panel">
-            <div className="panel-hd">
-              <h3>Mis inversiones</h3>
-              <a href="invest.html" className="ic-btn ic-btn-ghost ic-btn-sm">Explorar proyectos →</a>
-            </div>
-            <div className="panel-body">
-              {[
-                { name:"Centro Logístico Sur",   amt:"5.000", roi:"+14.2%",  ret:"+$210/mes",  funded:62, status:"En construcción", trend:[100,104,108,112,116,121,124] },
-                { name:"Hub Logístico White",    amt:"7.500", roi:"+12.4%",  ret:"+$77/mes",   funded:91, status:"Operativo",       trend:[100,102,105,107,110,113,116] },
-                { name:"Galpones Cabildo I-III", amt:"2.000", roi:"+11.5%",  ret:"—",          funded:24, status:"Pre-venta",        trend:[100,100,101,100,102,103,104] },
-              ].map((p,i)=>(
-                <div key={i} className="invest-row">
-                  <div>
-                    <div style={{fontWeight:600,fontSize:14}}>{p.name}</div>
-                    <div style={{fontSize:11.5,color:'var(--ic-text-2)',marginTop:2}}>{p.status}</div>
-                  </div>
-                  <div className="stat"><div className="k">INVERTIDO</div><div className="v ic-num" style={{fontSize:15}}>USD {p.amt}</div></div>
-                  <div className="stat"><div className="k">ROI EST.</div><div className="v ic-num" style={{fontSize:15,color:'var(--ic-gold)'}}>{p.roi}</div></div>
-                  <div className="stat"><div className="k">RETORNO MES</div><div className="v ic-num" style={{fontSize:15}}>{p.ret}</div></div>
-                  <div>
-                    <SparkLine vals={p.trend} color={'var(--ic-burgundy)'}/>
-                    <div className="progress-mini"><div style={{width:p.funded+'%'}}/></div>
-                  </div>
-                  <button className="ic-btn ic-btn-secondary ic-btn-sm">Ver</button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Two columns */}
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24}}>
-            {/* Alertas IA */}
-            <div className="panel">
-              <div className="panel-hd">
-                <h3>Alertas IA <span style={{fontWeight:400,color:'var(--ic-text-2)',fontSize:12,marginLeft:6}}>4 nuevas</span></h3>
-                <button className="ic-btn ic-btn-ghost ic-btn-sm">Configurar</button>
-              </div>
               <div className="panel-body">
-                {[
-                  { ai:true, t:"Apareció una propiedad que coincide con tu búsqueda guardada", sub:"Galpón 1.200 m² · Puerto Ing. White · USD 520.000", time:"hace 2h" },
-                  { ai:true, t:"Tu zona de interés subió +4.2% en 6 meses", sub:"Puerto Ing. White · USD/m² promedio: $480", time:"hace 1 día" },
-                  { t:"Nuevo proyecto fraccionado en zona de interés", sub:"Centro Logístico Sur · ROI estimado 14.2%", time:"hace 2 días" },
-                  { t:"Recibiste una nueva consulta", sub:"Sobre Galpón 1.800 m² · de Juan P.", time:"hace 3 días" },
-                ].map((a,i)=>(
-                  <div key={i} className={"alert-row " + (a.ai?"gold":"")}>
-                    <div className="icon">
-                      {a.ai
-                        ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z"/></svg>
-                        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="1.8"/></svg>}
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:13.5,fontWeight:500}}>{a.t}</div>
-                      <div style={{fontSize:12.5,color:'var(--ic-text-2)',marginTop:2}}>{a.sub}</div>
-                      <div style={{fontSize:11,color:'var(--ic-text-3)',fontFamily:'var(--ic-mono)',letterSpacing:'.08em',marginTop:4}}>{a.time}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Consultas / Mensajes */}
-            <div className="panel">
-              <div className="panel-hd">
-                <h3>Consultas recientes</h3>
-                <button className="ic-btn ic-btn-ghost ic-btn-sm">Ver todas →</button>
-              </div>
-              <div className="panel-body">
-                {[
-                  { who:"Juan P. Castro", prop:"Galpón 1.800 m²", txt:"Hola, me interesa la propiedad. ¿Cuándo podrías mostrarla?", time:"hace 1h", unread:true },
-                  { who:"María L. Russo", prop:"Galpón 920 m² · alquiler", txt:"Consulto si aceptan contrato a 3 años con bonificación.", time:"hace 4h", unread:true },
-                  { who:"Logística Atlántica SA", prop:"Nave 3.200 m²", txt:"¿Tiene certificado de habilitación industrial?", time:"hace 1 día" },
-                  { who:"Inv. del Sur", prop:"Galpón 1.800 m²", txt:"Listo, agendamos la visita para el viernes 17:00.", time:"hace 2 días" },
-                ].map((m,i)=>(
-                  <div key={i} className="alert-row">
-                    <div className="ic-avatar" style={{width:36,height:36,fontSize:12}}>{m.who.split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
-                    <div style={{flex:1}}>
-                      <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                        <span style={{fontSize:13.5,fontWeight:600}}>{m.who}</span>
-                        {m.unread && <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-burgundy)'}}/>}
+                {myProps.length === 0
+                  ? <EmptyState msg="No tenés propiedades publicadas." cta="Publicar ahora" href="publish.html"/>
+                  : myProps.map((p,i)=>(
+                      <div key={p.id||i} className="listing-row">
+                        <div className="thumb"/>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:14,marginBottom:2}}>{p.title}</div>
+                          <div style={{fontSize:12,color:'var(--ic-text-2)'}}>{p.zone || p.location} · {p.mode}</div>
+                          {p.aiHighlight && <div style={{marginTop:6}}><AILabel>IA destaca</AILabel></div>}
+                        </div>
+                        <div className="stat"><div className="v ic-num">{p.views||0}</div><div className="k">VISTAS</div></div>
+                        <div className="stat ic-num" style={{fontWeight:600,fontSize:15}}>
+                          {p.price ? 'USD ' + p.price.toLocaleString() : '—'}
+                        </div>
+                        <div style={{display:'flex',gap:6}}>
+                          <a href={'property.html?id='+p.id} className="ic-btn ic-btn-secondary ic-btn-sm">Ver</a>
+                          <button className="ic-btn ic-btn-sm" style={{color:'var(--ic-danger)',borderColor:'var(--ic-danger)'}}
+                            onClick={()=>handleDelete(p.id)}>Eliminar</button>
+                        </div>
                       </div>
-                      <div style={{fontSize:11.5,color:'var(--ic-text-2)',fontFamily:'var(--ic-mono)',letterSpacing:'.06em',marginTop:1}}>{m.prop}</div>
-                      <div style={{fontSize:13,color:'var(--ic-text)',marginTop:6,lineHeight:1.4}}>"{m.txt}"</div>
-                      <div style={{fontSize:11,color:'var(--ic-text-3)',marginTop:4,fontFamily:'var(--ic-mono)'}}>{m.time}</div>
-                    </div>
-                  </div>
-                ))}
+                    ))
+                }
               </div>
             </div>
-          </div>
+          )}
 
-          <div style={{marginTop:24}}>
-            <div className="empty-cta">
-              <div style={{flex:1}}>
-                <h4 style={{margin:0,fontSize:15,fontWeight:600}}>Verificación premium pendiente</h4>
-                <p style={{margin:'6px 0 0',fontSize:13,color:'var(--ic-text-2)'}}>Completá la verificación premium para obtener el badge ★ Premium y aparecer destacado en resultados.</p>
+          {/* ── INVERSIONES ── */}
+          {tab === 'invest' && (
+            <div className="panel">
+              <div className="panel-hd">
+                <h3>Mis inversiones ({investments.length})</h3>
+                <a href="invest.html" className="ic-btn ic-btn-ghost ic-btn-sm">Explorar proyectos →</a>
               </div>
-              <button className="ic-btn ic-btn-gold">Empezar verificación →</button>
+              <div className="panel-body">
+                {investments.length === 0
+                  ? <EmptyState msg="No tenés inversiones todavía." cta="Explorar proyectos" href="invest.html"/>
+                  : investments.map((inv,i)=>{
+                      const proj = (() => { try { return IndDB.getInvestProject(inv.projectId); } catch(e){ return null; } })();
+                      return (
+                        <div key={inv.id||i} className="invest-row">
+                          <div>
+                            <div style={{fontWeight:600,fontSize:14}}>{proj ? proj.name : inv.projectId}</div>
+                            <div style={{fontSize:11.5,color:'var(--ic-text-2)',marginTop:2}}>{proj ? proj.status : ''}</div>
+                          </div>
+                          <div className="stat"><div className="k">INVERTIDO</div><div className="v ic-num" style={{fontSize:15}}>USD {(inv.amount||0).toLocaleString()}</div></div>
+                          <div className="stat"><div className="k">ROI EST.</div><div className="v ic-num" style={{fontSize:15,color:'var(--ic-gold)'}}>{proj ? proj.roi + '%' : '—'}</div></div>
+                          <div className="stat"><div className="k">FINANCIADO</div>
+                            <div>
+                              <div className="v ic-num" style={{fontSize:15}}>{proj ? proj.funded + '%' : '—'}</div>
+                              {proj && <div className="progress-mini"><div style={{width:proj.funded+'%'}}/></div>}
+                            </div>
+                          </div>
+                          <a href="invest.html" className="ic-btn ic-btn-secondary ic-btn-sm">Ver</a>
+                        </div>
+                      );
+                    })
+                }
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* ── CONSULTAS RECIBIDAS ── */}
+          {tab === 'received' && (
+            <div className="panel">
+              <div className="panel-hd">
+                <h3>Consultas recibidas ({inquiriesIn.length})</h3>
+              </div>
+              <div className="panel-body">
+                {inquiriesIn.length === 0
+                  ? <EmptyState msg="No recibiste consultas todavía."/>
+                  : inquiriesIn.map((m,i)=>(
+                      <div key={i} className="alert-row">
+                        <div className="ic-avatar" style={{width:36,height:36,fontSize:12}}>
+                          {(m.fromName||'?').split(' ').map(w=>w[0]).slice(0,2).join('')}
+                        </div>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13.5,fontWeight:600}}>{m.fromName || m.fromEmail}</div>
+                          <div style={{fontSize:11.5,color:'var(--ic-text-2)',fontFamily:'var(--ic-mono)',marginTop:1}}>{m.propTitle}</div>
+                          <div style={{fontSize:13,color:'var(--ic-text)',marginTop:6,lineHeight:1.4}}>"{m.message}"</div>
+                          {m.fromEmail && <div style={{fontSize:11.5,color:'var(--ic-text-3)',marginTop:4}}>{m.fromEmail}</div>}
+                        </div>
+                      </div>
+                    ))
+                }
+              </div>
+            </div>
+          )}
+
+          {/* ── CONSULTAS ENVIADAS ── */}
+          {tab === 'sent' && (
+            <div className="panel">
+              <div className="panel-hd">
+                <h3>Consultas enviadas ({inquiriesOut.length})</h3>
+              </div>
+              <div className="panel-body">
+                {inquiriesOut.length === 0
+                  ? <EmptyState msg="No enviaste consultas todavía." cta="Buscar propiedades" href="search.html"/>
+                  : inquiriesOut.map((m,i)=>(
+                      <div key={i} className="alert-row">
+                        <div className="ic-avatar" style={{width:36,height:36,fontSize:12}}>
+                          {(m.propTitle||'P').split(' ').map(w=>w[0]).slice(0,2).join('')}
+                        </div>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13.5,fontWeight:600}}>{m.propTitle}</div>
+                          <div style={{fontSize:13,color:'var(--ic-text)',marginTop:6,lineHeight:1.4}}>"{m.message}"</div>
+                          {m.propId && <a href={'property.html?id='+m.propId} style={{fontSize:12,color:'var(--ic-burgundy)',marginTop:4,display:'inline-block'}}>Ver propiedad →</a>}
+                        </div>
+                      </div>
+                    ))
+                }
+              </div>
+            </div>
+          )}
+
+          {/* ── GUARDADAS ── */}
+          {tab === 'saved' && (
+            <div className="panel">
+              <div className="panel-hd">
+                <h3>Propiedades guardadas ({favorites.length})</h3>
+              </div>
+              <div className="panel-body">
+                {favorites.length === 0
+                  ? <EmptyState msg="No guardaste propiedades todavía." cta="Buscar propiedades" href="search.html"/>
+                  : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:16,paddingTop:8}}>
+                      {favorites.map(p => (
+                        <a key={p.id} href={'property.html?id='+p.id} style={{textDecoration:'none'}}>
+                          <PropertyCard p={p}/>
+                        </a>
+                      ))}
+                    </div>
+                }
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

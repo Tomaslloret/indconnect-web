@@ -16,6 +16,9 @@
   }/*EDITMODE-END*/;
 </script>
 
+<script src="auth.js"></script>
+<script src="db.js"></script>
+
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
@@ -183,7 +186,7 @@
 <script type="text/babel" src="tweaks.jsx"></script>
 
 <script type="text/babel" data-presets="env,react">
-const { useState } = React;
+const { useState, useEffect, useRef } = React;
 
 const STEPS = [
   { id:1, t:"Tipo y modalidad",     s:"Categoría · venta/alquiler/pozo" },
@@ -195,25 +198,101 @@ const STEPS = [
 ];
 
 const TYPES = [
-  { id:"galp",  name:"Galpón",            icon:"M3 21V8L9 4L15 8V21" },
-  { id:"nave",  name:"Nave Industrial",   icon:"M3 21H21V12L12 5L3 12V21M9 21V14H15V21" },
-  { id:"terr",  name:"Terreno",           icon:"M4 18L9 12L13 15L20 8" },
-  { id:"cl",    name:"Centro Logístico",  icon:"M3 21V11M21 21V11M3 11L12 4L21 11M7 21V15H17V21" },
-  { id:"loc",   name:"Local",             icon:"M5 21V8L12 4L19 8V21M9 21V14H15V21" },
+  { id:"Galpón",            name:"Galpón",            icon:"M3 21V8L9 4L15 8V21" },
+  { id:"Nave Industrial",   name:"Nave Industrial",   icon:"M3 21H21V12L12 5L3 12V21M9 21V14H15V21" },
+  { id:"Terreno",           name:"Terreno",           icon:"M4 18L9 12L13 15L20 8" },
+  { id:"Centro Logístico",  name:"Centro Logístico",  icon:"M3 21V11M21 21V11M3 11L12 4L21 11M7 21V15H17V21" },
+  { id:"Local Industrial",  name:"Local",             icon:"M5 21V8L12 4L19 8V21M9 21V14H15V21" },
 ];
+
+const ZONE_LABELS = {
+  white:   "Puerto Ing. White",
+  parque:  "Parque Industrial",
+  polo:    "Polo Petroquímico",
+  carrin:  "La Carrindanga",
+  cerri:   "General Cerri",
+  cabildo: "Cabildo Industrial",
+};
 
 function PublishPage() {
   const [t] = useIndTweaks();
-  const [type, setType] = useState('galp');
-  const [mode, setMode] = useState('venta');
-  const [verified, setVerified] = useState(false);
+  const [user, setUser] = useState(null);
+
+  // Form fields
+  const [type,        setType]        = useState('Galpón');
+  const [mode,        setMode]        = useState('venta');
+  const [title,       setTitle]       = useState('');
+  const [location,    setLocation]    = useState('');
+  const [zone,        setZone]        = useState('white');
+  const [surface,     setSurface]     = useState('');
+  const [landArea,    setLandArea]    = useState('');
+  const [height,      setHeight]      = useState('');
+  const [access,      setAccess]      = useState('');
+  const [electricity, setElectricity] = useState('');
+  const [price,       setPrice]       = useState('');
+  const [description, setDescription] = useState('');
+  const [verified,    setVerified]    = useState(false);
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState('');
+
+  useEffect(() => {
+    IndAuth.requireAuth();
+    const u = IndAuth.getCurrentUser();
+    if (u) setUser(u);
+  }, []);
+
+  // Compute completion score
+  const checks = [
+    !!type,
+    !!mode,
+    !!title.trim(),
+    !!location.trim(),
+    !!surface,
+    !!price,
+    !!description.trim(),
+    verified,
+  ];
+  const score = Math.round((checks.filter(Boolean).length / checks.length) * 100);
+
+  const handlePublish = () => {
+    if (!user) { IndAuth.requireAuth(); return; }
+    if (!title.trim()) { setError('El título es obligatorio.'); return; }
+    if (!location.trim()) { setError('La ubicación es obligatoria.'); return; }
+    if (!price || isNaN(parseFloat(price))) { setError('Ingresá un precio válido.'); return; }
+    setError('');
+    setSaving(true);
+    try {
+      IndDB.addProperty({
+        userId:      user.id,
+        sellerName:  user.name,
+        company:     user.company || '',
+        type,
+        mode,
+        title:       title.trim(),
+        location:    location.trim(),
+        zone:        ZONE_LABELS[zone] || zone,
+        surface:     surface ? parseFloat(surface) : null,
+        landArea:    landArea ? parseFloat(landArea) : null,
+        height:      height.trim(),
+        access:      access.trim(),
+        electricity: electricity.trim(),
+        price:       parseFloat(price),
+        description: description.trim(),
+        verified,
+      });
+      window.location.href = 'dashboard.html';
+    } catch(e) {
+      setError('Error al publicar. Intentá de nuevo.');
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="ic-page" data-screen-label="07 Publicar">
       <Header active="publish" logoVariant={t.logoVar}/>
 
       <div className="pub-shell">
-        {/* Steps */}
+        {/* Steps sidebar */}
         <aside className="pub-side">
           <div className="ic-eyebrow" style={{marginBottom:18}}>Pasos</div>
           {STEPS.map((s,i) => (
@@ -229,11 +308,11 @@ function PublishPage() {
           <div style={{marginTop:28,padding:14,borderRadius:10,background:'var(--ic-bg-2)',border:'1px solid var(--ic-line)'}}>
             <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10,marginBottom:6}}>PROGRESO</div>
             <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:8}}>
-              <span style={{fontWeight:600}}>33% completo</span>
-              <span style={{color:'var(--ic-text-2)'}}>2 / 6</span>
+              <span style={{fontWeight:600}}>{score}% completo</span>
+              <span style={{color:'var(--ic-text-2)'}}>{checks.filter(Boolean).length} / {checks.length}</span>
             </div>
             <div style={{height:4,background:'var(--ic-line)',borderRadius:2,overflow:'hidden'}}>
-              <div style={{width:'33%',height:'100%',background:'var(--ic-burgundy)'}}/>
+              <div style={{width:score+'%',height:'100%',background:'var(--ic-burgundy)',transition:'width .3s'}}/>
             </div>
             <p style={{fontSize:11.5,color:'var(--ic-text-2)',margin:'10px 0 0',lineHeight:1.5}}>
               Podés guardar como borrador en cualquier momento.
@@ -247,7 +326,7 @@ function PublishPage() {
             <div className="ic-eyebrow" style={{marginBottom:10}}>Nueva publicación</div>
             <h1 style={{margin:0,fontSize:32,fontWeight:600,letterSpacing:'-.025em'}}>Publicá tu propiedad industrial</h1>
             <p style={{color:'var(--ic-text-2)',fontSize:15,maxWidth:560,marginTop:12,lineHeight:1.55}}>
-              En 6 pasos completás todo. Nuestra IA te ayuda con sugerencias de precio basadas en comparables y proyección de la zona.
+              Completá los campos. Nuestra IA te ayuda con sugerencias de precio basadas en comparables y proyección de la zona.
             </p>
           </div>
 
@@ -261,7 +340,7 @@ function PublishPage() {
 
             <div className="type-grid">
               {TYPES.map(T => (
-                <div key={T.id} className={"type-card " + (type===T.id?"on":"")} onClick={()=>setType(T.id)}>
+                <div key={T.id} className={"type-card " + (type===T.id?"on":"")} onClick={()=>setType(T.id)} style={{cursor:'pointer'}}>
                   <div className="icon">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                       <path d={T.icon} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"/>
@@ -276,16 +355,22 @@ function PublishPage() {
               <div className="ic-label">Modalidad</div>
               <div className="mode-row">
                 {[
-                  { id:"venta", t:"Venta" },
+                  { id:"venta",    t:"Venta" },
                   { id:"alquiler", t:"Alquiler" },
-                  { id:"pozo", t:"Inversión en pozo" },
-                  { id:"frac", t:"Fraccionada · co-inversión" },
+                  { id:"pozo",     t:"Inversión en pozo" },
+                  { id:"frac",     t:"Fraccionada · co-inversión" },
                 ].map(m => (
-                  <div key={m.id} className={"mode-pill " + (mode===m.id?"on":"")} onClick={()=>setMode(m.id)}>
+                  <div key={m.id} className={"mode-pill " + (mode===m.id?"on":"")} onClick={()=>setMode(m.id)} style={{cursor:'pointer'}}>
                     <span className="dot"/>{m.t}
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div style={{marginTop:22}}>
+              <label className="ic-label">Título de la publicación</label>
+              <input className="ic-input" value={title} onChange={e=>setTitle(e.target.value)}
+                placeholder="Ej: Galpón 1.800 m² con acceso para camiones · Puerto Ing. White"/>
             </div>
           </div>
 
@@ -295,16 +380,17 @@ function PublishPage() {
               <span className="num">02</span>
               <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Ubicación</h3>
             </div>
-            <p style={{margin:'4px 0 18px',fontSize:13,color:'var(--ic-text-2)'}}>Movete por el mapa o ingresá la dirección. Arrastrá el pin para ajustar.</p>
+            <p style={{margin:'4px 0 18px',fontSize:13,color:'var(--ic-text-2)'}}>Ingresá la dirección y seleccioná la zona.</p>
 
             <div className="field-row">
               <div>
                 <label className="ic-label">Dirección</label>
-                <input className="ic-input" defaultValue="Av. Cabrera 4521 · Puerto Ing. White"/>
+                <input className="ic-input" value={location} onChange={e=>setLocation(e.target.value)}
+                  placeholder="Av. Cabrera 4521 · Puerto Ing. White"/>
               </div>
               <div>
                 <label className="ic-label">Zona</label>
-                <select className="ic-select" defaultValue="white">
+                <select className="ic-select" value={zone} onChange={e=>setZone(e.target.value)}>
                   <option value="white">Puerto Ing. White</option>
                   <option value="parque">Parque Industrial</option>
                   <option value="polo">Polo Petroquímico</option>
@@ -325,18 +411,18 @@ function PublishPage() {
                 <rect width="400" height="280" fill="url(#grid-mp)"/>
                 <polygon points="180,80 320,75 330,170 195,180" fill="rgba(107,15,26,.20)" stroke="rgba(107,15,26,.4)"/>
                 <path d="M0,220 C100,210 180,235 280,220 C340,210 380,235 400,225 L400,280 L0,280 Z" fill="rgba(20,22,28,.55)"/>
-                <text x="240" y="120" fill="rgba(255,255,255,.5)" fontSize="9" fontFamily="Geist Mono">PUERTO ING. WHITE</text>
+                <text x="240" y="120" fill="rgba(255,255,255,.5)" fontSize="9" fontFamily="Geist Mono">{ZONE_LABELS[zone]}</text>
               </svg>
               <div className="pin-drop"><div className="head"/></div>
               <div style={{position:'absolute',top:12,left:12,padding:'6px 10px',background:'rgba(20,22,28,.85)',color:'#fff',fontSize:11,borderRadius:6,fontFamily:'var(--ic-mono)',letterSpacing:'.06em'}}>
-                -38.7785, -62.2680
+                {ZONE_LABELS[zone]}
               </div>
             </div>
 
             <div style={{marginTop:14,padding:14,background:'var(--ic-burgundy-tint)',borderRadius:10,display:'flex',gap:12,alignItems:'center'}}>
               <span style={{fontFamily:'var(--ic-mono)',fontSize:10,letterSpacing:'.14em',color:'var(--ic-burgundy)'}}>IA</span>
               <span style={{fontSize:13.5,color:'var(--ic-burgundy-ink)'}}>
-                Estás publicando en una zona con <b>+4.2% en 6 meses</b> y proyección <b>+22.4% a 36 meses</b>.
+                Estás publicando en <b>{ZONE_LABELS[zone]}</b>, una zona con alta demanda logística e industrial.
               </span>
             </div>
           </div>
@@ -351,37 +437,28 @@ function PublishPage() {
             <div className="field-row-3">
               <div>
                 <label className="ic-label">Superficie cubierta (m²)</label>
-                <input className="ic-input ic-num" placeholder="1.800"/>
+                <input className="ic-input ic-num" value={surface} onChange={e=>setSurface(e.target.value)} placeholder="1800"/>
               </div>
               <div>
                 <label className="ic-label">Superficie terreno (m²)</label>
-                <input className="ic-input ic-num" placeholder="2.400"/>
+                <input className="ic-input ic-num" value={landArea} onChange={e=>setLandArea(e.target.value)} placeholder="2400"/>
               </div>
               <div>
                 <label className="ic-label">Altura libre (m)</label>
-                <input className="ic-input ic-num" placeholder="9"/>
+                <input className="ic-input ic-num" value={height} onChange={e=>setHeight(e.target.value)} placeholder="9"/>
               </div>
             </div>
 
             <div className="field-row">
               <div>
-                <label className="ic-label">Habilitación industrial</label>
-                <select className="ic-select"><option>Categoría B vigente</option><option>Categoría A</option><option>Sin habilitación</option></select>
+                <label className="ic-label">Acceso</label>
+                <input className="ic-input" value={access} onChange={e=>setAccess(e.target.value)}
+                  placeholder="Ej: Doble portón para camiones"/>
               </div>
               <div>
-                <label className="ic-label">Antigüedad</label>
-                <input className="ic-input" placeholder="12 años"/>
-              </div>
-            </div>
-
-            <div className="field">
-              <label className="ic-label">Accesos y servicios</label>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
-                {["Acceso camiones","Doble portón","Playa de maniobras","Luz trifásica","Agua de red","Gas natural","Fibra óptica","Cloacas","Oficinas adm."].map(s=>(
-                  <label key={s} className="toggle-cb on" style={{padding:'8px 0'}}>
-                    <span className="swc"/>{s}
-                  </label>
-                ))}
+                <label className="ic-label">Electricidad</label>
+                <input className="ic-input" value={electricity} onChange={e=>setElectricity(e.target.value)}
+                  placeholder="Ej: Trifásica 380V"/>
               </div>
             </div>
           </div>
@@ -396,7 +473,7 @@ function PublishPage() {
             <div className="field-row">
               <div>
                 <label className="ic-label">Precio (USD)</label>
-                <input className="ic-input ic-num" placeholder="680.000"/>
+                <input className="ic-input ic-num" value={price} onChange={e=>setPrice(e.target.value)} placeholder="680000"/>
               </div>
               <div>
                 <label className="ic-label">Modalidad de pago</label>
@@ -404,22 +481,24 @@ function PublishPage() {
               </div>
             </div>
 
-            <div style={{padding:'16px 20px',background:'var(--ic-gold-tint)',borderRadius:10,border:'1px solid rgba(201,168,76,.35)'}}>
-              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
-                <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-gold)',boxShadow:'0 0 0 3px rgba(201,168,76,.25)'}}/>
-                <span className="ic-mono" style={{color:'#74540a',fontSize:10}}>SUGERENCIA DE PRECIO · IA</span>
+            {surface && price && !isNaN(parseFloat(price)) && !isNaN(parseFloat(surface)) && (
+              <div style={{padding:'16px 20px',background:'var(--ic-gold-tint)',borderRadius:10,border:'1px solid rgba(201,168,76,.35)'}}>
+                <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                  <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-gold)',boxShadow:'0 0 0 3px rgba(201,168,76,.25)'}}/>
+                  <span className="ic-mono" style={{color:'#74540a',fontSize:10}}>PRECIO POR M² · IA</span>
+                </div>
+                <div style={{fontSize:14,color:'#3a2a07',lineHeight:1.5}}>
+                  Con {surface} m² y USD {parseFloat(price).toLocaleString()}, el precio por m² es <b>USD {Math.round(parseFloat(price)/parseFloat(surface)).toLocaleString()}/m²</b>.
+                </div>
               </div>
-              <div style={{fontSize:14,color:'#3a2a07',lineHeight:1.5}}>
-                Basado en 12 comparables recientes en Puerto Ing. White, el precio sugerido para una propiedad de 1.800 m² está entre <b>USD 640.000 — 720.000</b> (≈ USD 355 — 400/m²).
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* Section 5 — Fotos */}
+          {/* Section 5 — Descripción */}
           <div className="form-card" style={{marginBottom:20}}>
             <div className="section-head">
               <span className="num">05</span>
-              <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Fotos, planos y descripción</h3>
+              <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Descripción</h3>
             </div>
 
             <div className="upload">
@@ -430,34 +509,22 @@ function PublishPage() {
               <div style={{fontSize:12,color:'var(--ic-text-2)',marginTop:4}}>JPG, PNG · Hasta 25 fotos · 10 MB c/u</div>
             </div>
 
-            <div className="photos-grid">
-              {[1,2,3].map(i=><div key={i} className="photo-mini"/>)}
-              <div className="photo-mini add">+</div>
-            </div>
-
             <div className="field" style={{marginTop:22}}>
               <label className="ic-label">Descripción</label>
-              <textarea className="ic-textarea" rows="5" placeholder="Describí la propiedad: estado, características, oportunidades, vecinos industriales..." style={{resize:'vertical'}}/>
-              <div style={{fontSize:11.5,color:'var(--ic-text-3)',marginTop:6,fontFamily:'var(--ic-mono)',letterSpacing:'.06em'}}>0 / 1.500 caracteres · La IA puede ayudarte a redactar →</div>
+              <textarea className="ic-textarea" rows="5" value={description} onChange={e=>setDescription(e.target.value)}
+                placeholder="Describí la propiedad: estado, características, oportunidades, vecinos industriales..."
+                style={{resize:'vertical'}}/>
+              <div style={{fontSize:11.5,color:'var(--ic-text-3)',marginTop:6,fontFamily:'var(--ic-mono)',letterSpacing:'.06em'}}>
+                {description.length} / 1.500 caracteres
+              </div>
             </div>
           </div>
 
-          {/* Section 6 — Contacto y verificación */}
+          {/* Section 6 — Verificación */}
           <div className="form-card" style={{marginBottom:20}}>
             <div className="section-head">
               <span className="num">06</span>
-              <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Contacto y verificación</h3>
-            </div>
-
-            <div className="field-row">
-              <div>
-                <label className="ic-label">Teléfono de contacto</label>
-                <input className="ic-input" placeholder="+54 291 555 5555"/>
-              </div>
-              <div>
-                <label className="ic-label">Email</label>
-                <input className="ic-input" placeholder="contacto@email.com"/>
-              </div>
+              <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Verificación</h3>
             </div>
 
             <div className="verif-card">
@@ -465,24 +532,32 @@ function PublishPage() {
                 <div>
                   <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
                     <VerifiedBadge/>
-                    <span style={{fontSize:11,fontFamily:'var(--ic-mono)',color:'#74540a',letterSpacing:'.12em'}}>OBTÉ EL BADGE DE VENDEDOR VERIFICADO</span>
+                    <span style={{fontSize:11,fontFamily:'var(--ic-mono)',color:'#74540a',letterSpacing:'.12em'}}>BADGE DE VENDEDOR VERIFICADO</span>
                   </div>
                   <h4 style={{margin:'4px 0 6px',fontSize:15,fontWeight:600,color:'#3a2a07'}}>Verificá tu identidad</h4>
                   <p style={{margin:0,fontSize:13,color:'#5c4711',lineHeight:1.5,maxWidth:420}}>
-                    Subí tu DNI y un selfie. Validamos en menos de 24h y aparecés con el badge en toda la plataforma. Las publicaciones verificadas reciben <b>3× más consultas</b>.
+                    Las publicaciones verificadas reciben <b>3× más consultas</b>.
                   </p>
                 </div>
-                <button className="ic-btn" style={{background:'#3a2a07',color:'#fff'}} onClick={()=>setVerified(!verified)}>
-                  {verified ? 'En revisión...' : 'Verificarme'}
+                <button className="ic-btn" style={{background:verified?'#3a2a07':'#fff',color:verified?'#fff':'#3a2a07',border:'1px solid #3a2a07'}}
+                  onClick={()=>setVerified(!verified)}>
+                  {verified ? '✓ Verificado' : 'Verificarme'}
                 </button>
               </div>
             </div>
           </div>
 
+          {error && (
+            <div style={{padding:'12px 16px',background:'rgba(220,38,38,.08)',border:'1px solid rgba(220,38,38,.2)',borderRadius:10,color:'var(--ic-danger)',fontSize:14,marginBottom:16}}>
+              {error}
+            </div>
+          )}
+
           <div style={{display:'flex',gap:10,justifyContent:'flex-end',paddingTop:16}}>
-            <button className="ic-btn ic-btn-ghost">Guardar como borrador</button>
-            <button className="ic-btn ic-btn-secondary">← Atrás</button>
-            <button className="ic-btn ic-btn-primary ic-btn-lg">Publicar propiedad →</button>
+            <a href="dashboard.html" className="ic-btn ic-btn-ghost">Cancelar</a>
+            <button className="ic-btn ic-btn-primary ic-btn-lg" onClick={handlePublish} disabled={saving}>
+              {saving ? 'Publicando...' : 'Publicar propiedad →'}
+            </button>
           </div>
         </main>
 
@@ -494,22 +569,26 @@ function PublishPage() {
           <div className="ic-card">
             <div className="ic-photo" data-label="FOTO PRINCIPAL" style={{aspectRatio:'4/3'}}>
               <div style={{position:'absolute',top:10,left:10,zIndex:2,display:'flex',gap:4}}>
-                <span className="ic-badge" style={{background:'rgba(255,255,255,.95)',fontSize:10}}>Galpón</span>
-                <span className="ic-badge" style={{background:'rgba(255,255,255,.95)',fontSize:10}}>VENTA</span>
+                <span className="ic-badge" style={{background:'rgba(255,255,255,.95)',fontSize:10}}>{type}</span>
+                <span className="ic-badge" style={{background:'rgba(255,255,255,.95)',fontSize:10}}>{mode.toUpperCase()}</span>
               </div>
             </div>
             <div style={{padding:14}}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-                <span style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>GALPÓN</span>
-                <span style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-3)',letterSpacing:'.14em'}}>1.800 m²</span>
+                <span style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>{type.toUpperCase()}</span>
+                {surface && <span style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-3)',letterSpacing:'.14em'}}>{surface} m²</span>}
               </div>
-              <div style={{fontSize:14,fontWeight:600,lineHeight:1.3,marginBottom:4}}>Galpón industrial con acceso camiones</div>
-              <div style={{fontSize:12,color:'var(--ic-text-2)',marginBottom:12}}>Puerto Ing. White · Bahía Blanca</div>
+              <div style={{fontSize:14,fontWeight:600,lineHeight:1.3,marginBottom:4}}>
+                {title || 'Título de la propiedad'}
+              </div>
+              <div style={{fontSize:12,color:'var(--ic-text-2)',marginBottom:12}}>
+                {ZONE_LABELS[zone]} · {location || 'Dirección'}
+              </div>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end'}}>
-                <div className="ic-num" style={{fontSize:17,fontWeight:600,letterSpacing:'-.02em'}}>USD 680.000</div>
-                <div style={{display:'flex',gap:4}}>
-                  <VerifiedBadge/>
+                <div className="ic-num" style={{fontSize:17,fontWeight:600,letterSpacing:'-.02em'}}>
+                  {price ? 'USD ' + parseFloat(price).toLocaleString() : 'Precio'}
                 </div>
+                {verified && <VerifiedBadge/>}
               </div>
             </div>
           </div>
@@ -518,18 +597,27 @@ function PublishPage() {
             <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10,marginBottom:8}}>SCORE DE PUBLICACIÓN · IA</div>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
               <span style={{fontSize:13,fontWeight:500}}>Completitud</span>
-              <span className="ic-num" style={{fontSize:13,fontWeight:600,color:'var(--ic-burgundy)'}}>72/100</span>
+              <span className="ic-num" style={{fontSize:13,fontWeight:600,color:'var(--ic-burgundy)'}}>{score}/100</span>
             </div>
             <div style={{height:4,background:'var(--ic-line)',borderRadius:2,overflow:'hidden',marginBottom:14}}>
-              <div style={{width:'72%',height:'100%',background:'var(--ic-burgundy)'}}/>
+              <div style={{width:score+'%',height:'100%',background:'var(--ic-burgundy)',transition:'width .3s'}}/>
             </div>
             <ul style={{margin:0,padding:0,listStyle:'none',fontSize:12.5,lineHeight:1.6,color:'var(--ic-text)'}}>
-              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-success)'}}>✓</span> Tipo y modalidad</li>
-              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-success)'}}>✓</span> Ubicación geocodificada</li>
-              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-text-3)'}}>○</span> Subir 5+ fotos</li>
-              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-text-3)'}}>○</span> Subir planos</li>
-              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-text-3)'}}>○</span> Completar descripción</li>
-              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-text-3)'}}>○</span> Verificar identidad</li>
+              {[
+                [!!type,               'Tipo de propiedad'],
+                [!!mode,               'Modalidad'],
+                [!!title.trim(),       'Título'],
+                [!!location.trim(),    'Ubicación'],
+                [!!surface,            'Superficie'],
+                [!!price,              'Precio'],
+                [!!description.trim(), 'Descripción'],
+                [verified,             'Verificación'],
+              ].map(([ok, label], i) => (
+                <li key={i} style={{display:'flex',gap:8}}>
+                  <span style={{color: ok ? 'var(--ic-success)' : 'var(--ic-text-3)'}}>{ok ? '✓' : '○'}</span>
+                  {label}
+                </li>
+              ))}
             </ul>
           </div>
         </aside>

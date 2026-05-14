@@ -16,6 +16,9 @@
   }/*EDITMODE-END*/;
 </script>
 
+<script src="auth.js"></script>
+<script src="db.js"></script>
+
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
@@ -146,9 +149,9 @@
 <script type="text/babel" src="tweaks.jsx"></script>
 
 <script type="text/babel" data-presets="env,react">
-const { useState } = React;
+const { useState, useEffect } = React;
 
-function MiniMap({ layers, setLayers }) {
+function MiniMap({ layers, setLayers, zone }) {
   return (
     <div className="mini-map">
       <div className="layer-toggles">
@@ -173,10 +176,9 @@ function MiniMap({ layers, setLayers }) {
         {layers.fut && <polygon points="200,80 320,75 330,150 215,165" fill="none" stroke="rgba(201,168,76,.9)" strokeWidth="1.5" strokeDasharray="4,4"/>}
         <path d="M0,180 C100,170 180,200 280,180 C340,168 380,200 400,190 L400,225 L0,225 Z" fill="rgba(20,22,28,.55)"/>
         <path d="M0,180 C100,170 180,200 280,180 C340,168 380,200 400,190" stroke="rgba(255,255,255,.18)" fill="none"/>
-        <text x="240" y="105" fill="rgba(255,255,255,.6)" fontSize="9" fontFamily="Geist Mono">PUERTO ING. WHITE</text>
+        <text x="240" y="105" fill="rgba(255,255,255,.6)" fontSize="9" fontFamily="Geist Mono">{zone || 'ZONA'}</text>
         {layers.opp && <circle cx="270" cy="120" r="18" fill="rgba(201,168,76,.22)" stroke="rgba(201,168,76,.6)"/>}
       </svg>
-      {/* property pin */}
       <div style={{position:'absolute',top:'53%',left:'68%',transform:'translate(-50%,-100%)',zIndex:2}}>
         <div style={{width:14,height:14,borderRadius:'50%',background:'var(--ic-burgundy)',border:'3px solid #fff',boxShadow:'0 4px 10px rgba(0,0,0,.35)'}}/>
       </div>
@@ -185,10 +187,113 @@ function MiniMap({ layers, setLayers }) {
   );
 }
 
+function ContactModal({ prop, onClose }) {
+  const [msg, setMsg] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSend = () => {
+    const user = IndAuth.getCurrentUser();
+    if (!user) {
+      IndAuth.requireAuth();
+      return;
+    }
+    if (!msg.trim()) { setError('Escribí un mensaje antes de enviar.'); return; }
+    setSending(true);
+    try {
+      IndDB.sendInquiry({
+        fromUserId: user.id,
+        fromName: user.name,
+        fromEmail: user.email,
+        toSellerId: prop.sellerId || prop.userId,
+        propId: prop.id,
+        propTitle: prop.title,
+        message: msg.trim()
+      });
+      setSent(true);
+    } catch(e) {
+      setError('Error al enviar. Intentá de nuevo.');
+    }
+    setSending(false);
+  };
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(15,16,20,.6)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:24}}
+      onClick={onClose}>
+      <div style={{background:'#fff',borderRadius:16,maxWidth:480,width:'100%',padding:32,position:'relative'}}
+        onClick={e=>e.stopPropagation()}>
+        <button onClick={onClose} style={{position:'absolute',top:16,right:16,width:32,height:32,borderRadius:'50%',background:'var(--ic-bg-2)',border:0,fontSize:18,cursor:'pointer'}}>×</button>
+        {sent ? (
+          <div style={{textAlign:'center',padding:'24px 0'}}>
+            <div style={{fontSize:40,marginBottom:12}}>✓</div>
+            <h3 style={{margin:'0 0 8px',fontSize:20,fontWeight:600}}>Consulta enviada</h3>
+            <p style={{color:'var(--ic-text-2)',fontSize:14,margin:'0 0 20px'}}>El vendedor recibirá tu mensaje y te responderá a la brevedad.</p>
+            <button className="ic-btn ic-btn-primary" onClick={onClose}>Cerrar</button>
+          </div>
+        ) : (
+          <>
+            <h3 style={{margin:'0 0 6px',fontSize:20,fontWeight:600}}>Contactar al vendedor</h3>
+            <p style={{color:'var(--ic-text-2)',fontSize:13,margin:'0 0 20px'}}>{prop.title}</p>
+            <label className="ic-label">Tu mensaje</label>
+            <textarea className="ic-textarea" rows="4" value={msg} onChange={e=>{setMsg(e.target.value);setError('');}}
+              placeholder="Hola, me interesa esta propiedad. ¿Podría darme más información?"
+              style={{resize:'vertical',marginBottom:8}}/>
+            {error && <div style={{color:'var(--ic-danger)',fontSize:13,marginBottom:8}}>{error}</div>}
+            <button className="ic-btn ic-btn-primary" style={{width:'100%',justifyContent:'center',padding:14,marginTop:8}}
+              onClick={handleSend} disabled={sending}>
+              {sending ? 'Enviando...' : 'Enviar consulta'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PropertyPage() {
   const [t] = useIndTweaks();
   const [layers, setLayers] = useState({ val:true, fut:true, opp:true });
-  const [activeImg, setActiveImg] = useState(0);
+  const [prop, setProp] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isFav, setIsFav] = useState(false);
+  const [showContact, setShowContact] = useState(false);
+  const [favMsg, setFavMsg] = useState('');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (!id) { window.location.href = 'search.html'; return; }
+    try {
+      const p = IndDB.getProperty(id);
+      if (!p) { window.location.href = 'search.html'; return; }
+      IndDB.incrementViews(id);
+      setProp(p);
+      // check favorite
+      const user = IndAuth.getCurrentUser();
+      if (user) setIsFav(IndDB.isFavorite(user.id, id));
+    } catch(e) {
+      window.location.href = 'search.html';
+    }
+    setLoading(false);
+  }, []);
+
+  const handleFavorite = () => {
+    const user = IndAuth.getCurrentUser();
+    if (!user) { IndAuth.requireAuth(); return; }
+    try {
+      const newState = IndDB.toggleFavorite(user.id, prop.id);
+      setIsFav(newState);
+      setFavMsg(newState ? '¡Guardado en favoritos!' : 'Eliminado de favoritos');
+      setTimeout(() => setFavMsg(''), 2500);
+    } catch(e) {}
+  };
+
+  if (loading) return <div style={{padding:80,textAlign:'center',color:'var(--ic-text-2)'}}>Cargando propiedad...</div>;
+  if (!prop) return null;
+
+  const pricePerM2 = prop.surface && prop.price ? Math.round(prop.price / prop.surface) : null;
+  const sellerInitials = (prop.sellerName || prop.company || 'VV').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
 
   return (
     <div className="ic-page" data-screen-label="04 Propiedad">
@@ -198,61 +303,62 @@ function PropertyPage() {
         <div className="breadcrumb">
           <a href="index.html">Home</a>
           <span className="sep">/</span>
-          <a href="search.html">Galpones</a>
+          <a href="search.html">Propiedades</a>
           <span className="sep">/</span>
-          <a href="search.html">Puerto Ing. White</a>
+          <a href={"search.html?q=" + encodeURIComponent(prop.zone || '')}>{prop.zone || 'Zona'}</a>
           <span className="sep">/</span>
-          <span style={{color:'var(--ic-ink)'}}>Galpón 1.800 m² · acceso camiones</span>
+          <span style={{color:'var(--ic-ink)'}}>{prop.title}</span>
         </div>
 
         <div className="gallery">
-          <div className="ic-photo" data-label="GALPÓN · VISTA EXTERIOR FRENTE"/>
+          <div className="ic-photo" data-label="VISTA EXTERIOR FRENTE"/>
           <div className="ic-photo" data-label="INTERIOR PLANTA"/>
-          <div className="ic-photo" data-label="ACCESO CAMIONES"/>
-          <div className="ic-photo" data-label="OFICINAS"/>
+          <div className="ic-photo" data-label="ACCESO"/>
+          <div className="ic-photo" data-label="DETALLE"/>
           <div className="ic-photo" data-label="VISTA AÉREA">
-            <div className="more">+8 fotos · 3 planos</div>
+            <div className="more">Ver fotos</div>
           </div>
         </div>
 
         <div className="detail-grid">
           <main>
-            <div style={{display:'flex',gap:8,marginBottom:14}}>
-              <span className="ic-badge ic-badge-ai"><span className="dot"/>IA destaca</span>
-              <span className="ic-badge ic-badge-verified">Verificado IndConnect</span>
-              <span className="ic-badge">Galpón</span>
-              <span className="ic-badge">VENTA</span>
+            <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+              {prop.aiHighlight && <span className="ic-badge ic-badge-ai"><span className="dot"/>IA destaca</span>}
+              {prop.verified && <span className="ic-badge ic-badge-verified">Verificado IndConnect</span>}
+              {prop.type && <span className="ic-badge">{prop.type}</span>}
+              {prop.mode && <span className="ic-badge">{prop.mode.toUpperCase()}</span>}
             </div>
 
-            <h1 className="ic-h2" style={{margin:'0 0 8px'}}>Galpón industrial 1.800 m² con acceso para camiones</h1>
-            <div style={{display:'flex',gap:16,alignItems:'center',color:'var(--ic-text-2)',fontSize:14,marginBottom:8}}>
-              <span>📍 Puerto Ing. White · Bahía Blanca</span>
-              <span>·</span>
-              <span>Publicado hace 6 días</span>
-              <span>·</span>
-              <span>1.247 vistas</span>
+            <h1 className="ic-h2" style={{margin:'0 0 8px'}}>{prop.title}</h1>
+            <div style={{display:'flex',gap:16,alignItems:'center',color:'var(--ic-text-2)',fontSize:14,marginBottom:8,flexWrap:'wrap'}}>
+              {prop.location && <span>📍 {prop.location}{prop.zone ? ' · ' + prop.zone : ''}</span>}
+              {prop.views != null && <><span>·</span><span>{prop.views} vistas</span></>}
             </div>
 
+            {/* AI Analysis card */}
             <div className="ai-card">
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-gold)',boxShadow:'0 0 0 3px rgba(201,168,76,.25)'}}/>
                 <span className="ic-mono" style={{color:'var(--ic-gold)',fontSize:11}}>ANÁLISIS DE PROPIEDAD · MODELO IA</span>
               </div>
               <p className="quote">
-                "Esta propiedad está en una zona con proyección de revalorización del <b style={{color:'var(--ic-gold)'}}>+22.4% en 36 meses</b> según nuestro modelo. El precio USD/m² está <b>~8% por debajo</b> de comparables recientes en Puerto Ing. White, marcándola como una oportunidad subvaluada."
+                {prop.aiAnalysis
+                  ? <span dangerouslySetInnerHTML={{__html: prop.aiAnalysis}}/>
+                  : `"Esta propiedad se encuentra en ${prop.zone || 'zona industrial'}, con potencial de revalorización según el modelo de mercado de IndConnect."`
+                }
               </p>
               <div className="ai-stats">
                 <div>
                   <div className="k">Score IA</div>
-                  <div className="v ic-num" style={{color:'var(--ic-gold)'}}>92/100</div>
+                  <div className="v ic-num" style={{color:'var(--ic-gold)'}}>{prop.aiScore ? prop.aiScore + '/100' : '—'}</div>
                 </div>
                 <div>
                   <div className="k">Proy. 36m</div>
-                  <div className="v ic-num">+22.4%</div>
+                  <div className="v ic-num">{prop.aiProjection || '—'}</div>
                 </div>
                 <div>
                   <div className="k">Vs. comparables</div>
-                  <div className="v ic-num">−8%</div>
+                  <div className="v ic-num">{prop.aiVsMarket || '—'}</div>
                 </div>
               </div>
             </div>
@@ -260,17 +366,15 @@ function PropertyPage() {
             <h3 style={{fontSize:18,fontWeight:600,letterSpacing:'-.015em',margin:'8px 0 0'}}>Características</h3>
             <div className="spec-table" style={{marginTop:16}}>
               {[
-                ["Tipo","Galpón industrial"],
-                ["Superficie cubierta","1.800 m²"],
-                ["Superficie terreno","2.400 m²"],
-                ["Altura","9 m libres"],
-                ["Acceso camiones","Sí · doble portón"],
-                ["Estado","Excelente"],
-                ["Antigüedad","12 años"],
-                ["Servicios","Luz trifásica, agua, gas natural, fibra"],
-                ["Habilitación","Industrial categoría B"],
-                ["Modalidad","Venta directa"],
-              ].map(([k,v]) => (
+                prop.type       && ["Tipo", prop.type],
+                prop.surface    && ["Superficie cubierta", prop.surface + " m²"],
+                prop.landArea   && ["Superficie terreno", prop.landArea + " m²"],
+                prop.height     && ["Altura", prop.height],
+                prop.access     && ["Acceso", prop.access],
+                prop.electricity && ["Electricidad", prop.electricity],
+                prop.mode       && ["Modalidad", prop.mode],
+                prop.zone       && ["Zona", prop.zone],
+              ].filter(Boolean).map(([k,v]) => (
                 <div key={k}>
                   <div className="k">{k}</div>
                   <div className="v">{v}</div>
@@ -278,56 +382,63 @@ function PropertyPage() {
               ))}
             </div>
 
-            <h3 style={{fontSize:18,fontWeight:600,letterSpacing:'-.015em',margin:'40px 0 12px'}}>Descripción</h3>
-            <div style={{fontSize:15,color:'var(--ic-text)',lineHeight:1.6,maxWidth:720}}>
-              <p style={{marginTop:0}}>
-                Galpón industrial de 1.800 m² cubiertos sobre terreno de 2.400 m² en Puerto Ingeniero White, a 2 km del acceso portuario. Doble portón de acceso para camiones de gran porte, playa de maniobras propia y 9 m libres de altura interior.
-              </p>
-              <p>
-                Instalación trifásica, oficinas administrativas de 120 m² independientes, sala de máquinas, vestuarios y baños habilitados. Habilitación industrial categoría B vigente. Estructura metálica con cubierta de chapa, pisos de hormigón armado de alta resistencia.
-              </p>
-              <p>
-                Ideal para operaciones de logística portuaria, almacenamiento o manufactura liviana. Zona consolidada con vecinos industriales de primera línea.
-              </p>
-            </div>
+            {prop.description && (
+              <>
+                <h3 style={{fontSize:18,fontWeight:600,letterSpacing:'-.015em',margin:'40px 0 12px'}}>Descripción</h3>
+                <div style={{fontSize:15,color:'var(--ic-text)',lineHeight:1.6,maxWidth:720}}>
+                  {prop.description.split('\n').map((para,i) => <p key={i} style={{marginTop:i===0?0:12}}>{para}</p>)}
+                </div>
+              </>
+            )}
 
             <h3 style={{fontSize:18,fontWeight:600,letterSpacing:'-.015em',margin:'40px 0 12px'}}>Ubicación · análisis de zona</h3>
             <p style={{fontSize:13.5,color:'var(--ic-text-2)',margin:'0 0 14px',maxWidth:600}}>
               Activá capas de IA para ver valor actual, proyección y oportunidades en la zona.
             </p>
-            <MiniMap layers={layers} setLayers={setLayers}/>
+            <MiniMap layers={layers} setLayers={setLayers} zone={prop.zone}/>
 
             <h3 style={{fontSize:18,fontWeight:600,letterSpacing:'-.015em',margin:'40px 0 12px'}}>
               Propiedades similares
               <AILabel> · recomendadas por IA</AILabel>
             </h3>
             <div className="similar-grid">
-              {PROPS.slice(1,5).map(p => <PropertyCard key={p.id} p={p}/>)}
+              {(IndDB.getProperties({ type: prop.type }) || [])
+                .filter(p => p.id !== prop.id)
+                .slice(0, 4)
+                .map(p => (
+                  <a key={p.id} href={'property.html?id=' + p.id} style={{textDecoration:'none'}}>
+                    <PropertyCard p={p}/>
+                  </a>
+                ))}
             </div>
           </main>
 
           <aside>
             <div className="price-card">
-              <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10.5,marginBottom:6}}>PRECIO DE VENTA</div>
+              <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10.5,marginBottom:6}}>
+                {prop.mode === 'alquiler' ? 'PRECIO DE ALQUILER' : 'PRECIO DE VENTA'}
+              </div>
               <div className="ic-num" style={{fontSize:36,fontWeight:600,letterSpacing:'-.03em',lineHeight:1}}>
-                USD 680.000
+                USD {prop.price ? prop.price.toLocaleString() : '—'}
               </div>
-              <div className="ic-num" style={{fontSize:13,color:'var(--ic-text-2)',marginTop:6}}>
-                USD 378/m² · ~8% bajo comparables
-              </div>
+              {pricePerM2 && (
+                <div className="ic-num" style={{fontSize:13,color:'var(--ic-text-2)',marginTop:6}}>
+                  USD {pricePerM2.toLocaleString()}/m²
+                </div>
+              )}
 
               <div style={{height:1,background:'var(--ic-line)',margin:'22px 0'}}/>
 
               <div style={{display:'flex',gap:8,marginBottom:14,flexDirection:'column'}}>
-                <button className="ic-btn ic-btn-primary" style={{width:'100%',justifyContent:'center',padding:14}}>
+                <button className="ic-btn ic-btn-primary" style={{width:'100%',justifyContent:'center',padding:14}}
+                  onClick={()=>{ const u=IndAuth.getCurrentUser(); if(!u){IndAuth.requireAuth();return;} setShowContact(true); }}>
                   Contactar al vendedor
                 </button>
-                <button className="ic-btn ic-btn-secondary" style={{width:'100%',justifyContent:'center'}}>
-                  Programar visita
+                <button className="ic-btn ic-btn-ghost" style={{width:'100%',justifyContent:'center'}}
+                  onClick={handleFavorite}>
+                  {isFav ? '♥ Guardado' : '♡ Guardar'}
                 </button>
-                <button className="ic-btn ic-btn-ghost" style={{width:'100%',justifyContent:'center'}}>
-                  ♡ Guardar
-                </button>
+                {favMsg && <div style={{fontSize:12,color:'var(--ic-burgundy)',textAlign:'center',fontFamily:'var(--ic-mono)'}}>{favMsg}</div>}
               </div>
 
               <div style={{padding:14,background:'var(--ic-gold-tint)',borderRadius:10,border:'1px solid rgba(201,168,76,.3)'}}>
@@ -341,67 +452,31 @@ function PropertyPage() {
               </div>
             </div>
 
-            <div className="seller-card">
-              <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10,marginBottom:14}}>PUBLICADO POR</div>
-              <div style={{display:'flex',gap:14,alignItems:'center',marginBottom:14}}>
-                <div className="ic-avatar" style={{width:52,height:52,fontSize:17}}>LS</div>
-                <div>
-                  <div style={{fontWeight:600,fontSize:15}}>Logística Sur SRL</div>
-                  <div style={{fontSize:12.5,color:'var(--ic-text-2)'}}>Inmobiliaria especializada</div>
-                </div>
-              </div>
-
-              <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
-                <VerifiedBadge/>
-                <VerifiedBadge premium/>
-                <VerifiedBadge ai/>
-              </div>
-
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,border:'1px solid var(--ic-line)',borderRadius:10,overflow:'hidden',marginBottom:14}}>
-                <div style={{padding:12,borderRight:'1px solid var(--ic-line)'}}>
-                  <div style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>CALIFICACIÓN</div>
-                  <div style={{display:'flex',alignItems:'center',gap:6,marginTop:6}}>
-                    <Stars value={4.9}/>
-                    <span className="ic-num" style={{fontWeight:600,fontSize:15}}>4.9</span>
+            {(prop.sellerName || prop.company) && (
+              <div className="seller-card">
+                <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10,marginBottom:14}}>PUBLICADO POR</div>
+                <div style={{display:'flex',gap:14,alignItems:'center',marginBottom:14}}>
+                  <div className="ic-avatar" style={{width:52,height:52,fontSize:17}}>{sellerInitials}</div>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:15}}>{prop.sellerName || prop.company}</div>
+                    {prop.company && prop.sellerName !== prop.company &&
+                      <div style={{fontSize:12.5,color:'var(--ic-text-2)'}}>{prop.company}</div>}
                   </div>
                 </div>
-                <div style={{padding:12}}>
-                  <div style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>OPERACIONES</div>
-                  <div style={{fontSize:15,fontWeight:600,marginTop:6}} className="ic-num">48 cerradas</div>
+                <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
+                  {prop.verified && <VerifiedBadge/>}
                 </div>
-                <div style={{padding:12,borderTop:'1px solid var(--ic-line)',borderRight:'1px solid var(--ic-line)'}}>
-                  <div style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>RESPUESTA</div>
-                  <div style={{fontSize:15,fontWeight:600,marginTop:6}}>~ 2 horas</div>
-                </div>
-                <div style={{padding:12,borderTop:'1px solid var(--ic-line)'}}>
-                  <div style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>EN PLATAFORMA</div>
-                  <div style={{fontSize:15,fontWeight:600,marginTop:6}}>2 años</div>
-                </div>
+                <button className="ic-btn ic-btn-secondary" style={{width:'100%',justifyContent:'center'}}
+                  onClick={()=>{ const u=IndAuth.getCurrentUser(); if(!u){IndAuth.requireAuth();return;} setShowContact(true); }}>
+                  Enviar mensaje
+                </button>
               </div>
-
-              <div style={{marginBottom:8}}>
-                <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10,marginBottom:8}}>RESEÑAS RECIENTES</div>
-                {[
-                  { name:"R. Martínez", t:"3 sem.", r:5, txt:"Operación impecable. Documentación clara, respondieron rápido y sin vueltas." },
-                  { name:"Inv. del Sur", t:"2 meses", r:5, txt:"Cerramos un alquiler de nave en 3 semanas. Recomendados." },
-                ].map((r,i)=>(
-                  <div key={i} className="review">
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                      <span style={{fontSize:13,fontWeight:500}}>{r.name}</span>
-                      <Stars value={r.r}/>
-                    </div>
-                    <p style={{fontSize:13,color:'var(--ic-text)',margin:0,lineHeight:1.5}}>{r.txt}</p>
-                    <span style={{fontSize:11.5,color:'var(--ic-text-3)',fontFamily:'var(--ic-mono)',letterSpacing:'.1em'}}>{r.t} · verificada</span>
-                  </div>
-                ))}
-              </div>
-
-              <a href="#" style={{display:'inline-block',marginTop:12,fontSize:13,color:'var(--ic-burgundy)',fontWeight:500}}>Ver perfil completo →</a>
-            </div>
+            )}
           </aside>
         </div>
       </div>
 
+      {showContact && <ContactModal prop={prop} onClose={()=>setShowContact(false)}/>}
       <Footer/>
     </div>
   );

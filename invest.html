@@ -16,6 +16,9 @@
   }/*EDITMODE-END*/;
 </script>
 
+<script src="auth.js"></script>
+<script src="db.js"></script>
+
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
@@ -107,7 +110,7 @@
 <script type="text/babel" src="tweaks.jsx"></script>
 
 <script type="text/babel" data-presets="env,react">
-const { useState } = React;
+const { useState, useEffect } = React;
 
 function StatusBadge({ s }) {
   const cfg = {
@@ -115,15 +118,17 @@ function StatusBadge({ s }) {
     "Pre-venta":       { bg:'rgba(46,125,91,.10)', col:'#1f5e44', dot:'#2E7D5B' },
     "Operativo":       { bg:'var(--ic-burgundy-tint)', col:'var(--ic-burgundy)', dot:'var(--ic-burgundy)' },
   }[s] || { bg:'var(--ic-line)', col:'var(--ic-text)', dot:'#888' };
-  return <span style={{display:'inline-flex',alignItems:'center',gap:6,padding:'4px 9px',borderRadius:999,background:cfg.bg,color:cfg.col,fontSize:11.5,fontWeight:500}}>
-    <span style={{width:6,height:6,borderRadius:'50%',background:cfg.dot}}/>{s}
-  </span>;
+  return (
+    <span style={{display:'inline-flex',alignItems:'center',gap:6,padding:'4px 9px',borderRadius:999,background:cfg.bg,color:cfg.col,fontSize:11.5,fontWeight:500}}>
+      <span style={{width:6,height:6,borderRadius:'50%',background:cfg.dot}}/>{s}
+    </span>
+  );
 }
 
 function ProjectCard({ p, onOpen }) {
   return (
-    <div className="project-card" onClick={()=>onOpen(p)}>
-      <div className="photo" data-label={p.photo}>
+    <div className="project-card" onClick={()=>onOpen(p)} style={{cursor:'pointer'}}>
+      <div className="photo" data-label={p.name}>
         <div style={{position:'absolute',top:12,left:12,zIndex:2}}>
           <StatusBadge s={p.status}/>
         </div>
@@ -141,18 +146,18 @@ function ProjectCard({ p, onOpen }) {
         </div>
 
         <div style={{display:'flex',justifyContent:'space-between',fontSize:12.5,color:'var(--ic-text-2)',marginTop:18}}>
-          <span>USD <b className="ic-num" style={{color:'var(--ic-ink)'}}>{p.total}</b> total</span>
+          <span>USD <b className="ic-num" style={{color:'var(--ic-ink)'}}>{typeof p.total === 'number' ? p.total.toLocaleString() : p.total}</b> total</span>
           <span><b className="ic-num" style={{color:'var(--ic-ink)'}}>{p.funded}%</b> financiado</span>
         </div>
-        <div className="progress"><div style={{width:p.funded+'%'}}/></div>
+        <div className="progress"><div style={{width:Math.min(p.funded,100)+'%'}}/></div>
         <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--ic-text-3)',fontFamily:'var(--ic-mono)',letterSpacing:'.06em'}}>
-          <span>DESDE USD {p.min}</span>
+          <span>DESDE USD {typeof p.min === 'number' ? p.min.toLocaleString() : p.min}</span>
           <span>{p.term}</span>
         </div>
 
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:16,paddingTop:16,borderTop:'1px solid var(--ic-line)'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <Reputation rating={p.developerRep} count={p.developerOps} compact/>
+            {p.developerRep && <Reputation rating={p.developerRep} count={p.developerOps||0} compact/>}
             <VerifiedBadge/>
           </div>
           <button className="ic-btn ic-btn-primary ic-btn-sm">Quiero invertir →</button>
@@ -162,16 +167,41 @@ function ProjectCard({ p, onOpen }) {
   );
 }
 
-function ProjectDetail({ p, onClose }) {
-  const [amount, setAmount] = useState(1000);
-  const roi = (amount * (parseFloat(p.roi)/100)).toFixed(0);
+function ProjectDetail({ p, onClose, onInvested }) {
+  const [amount, setAmount] = useState(p.min || 1000);
+  const [investing, setInvesting] = useState(false);
+  const [invested, setInvested] = useState(false);
+  const [error, setError] = useState('');
+  const roiAmt = (amount * (parseFloat(p.roi)/100)).toFixed(0);
+
+  const handleInvest = () => {
+    const user = IndAuth.getCurrentUser();
+    if (!user) { IndAuth.requireAuth(); return; }
+    if (amount < (p.min || 500)) { setError('El monto mínimo es USD ' + (p.min || 500).toLocaleString()); return; }
+    setError('');
+    setInvesting(true);
+    try {
+      IndDB.invest({
+        userId:    user.id,
+        userName:  user.name || user.email,
+        projectId: p.id,
+        amount,
+      });
+      setInvested(true);
+      if (onInvested) onInvested(p.id);
+    } catch(e) {
+      setError('Error al procesar la inversión. Intentá de nuevo.');
+    }
+    setInvesting(false);
+  };
+
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(15,16,20,.6)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:24,overflow:'auto'}}
       onClick={onClose}>
       <div style={{background:'#fff',borderRadius:18,maxWidth:980,width:'100%',maxHeight:'92vh',overflow:'auto',position:'relative'}}
         onClick={e=>e.stopPropagation()}>
-        <div className="ic-photo" data-label={p.photo} style={{height:280,borderRadius:'18px 18px 0 0'}}>
-          <button onClick={onClose} style={{position:'absolute',top:16,right:16,width:36,height:36,borderRadius:'50%',background:'rgba(255,255,255,.95)',border:0,fontSize:18,zIndex:3}}>×</button>
+        <div className="ic-photo" data-label={p.name} style={{height:280,borderRadius:'18px 18px 0 0'}}>
+          <button onClick={onClose} style={{position:'absolute',top:16,right:16,width:36,height:36,borderRadius:'50%',background:'rgba(255,255,255,.95)',border:0,fontSize:18,zIndex:3,cursor:'pointer'}}>×</button>
           <div style={{position:'absolute',top:16,left:16,zIndex:3,display:'flex',gap:6}}>
             <StatusBadge s={p.status}/>
             <VerifiedBadge ai/>
@@ -179,129 +209,134 @@ function ProjectDetail({ p, onClose }) {
         </div>
 
         <div style={{padding:'32px 36px 40px'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:24,marginBottom:24}}>
-            <div>
-              <h2 style={{margin:'0 0 6px',fontSize:30,fontWeight:600,letterSpacing:'-.025em'}}>{p.name}</h2>
-              <div style={{fontSize:14,color:'var(--ic-text-2)'}}>📍 {p.location}</div>
+          {invested ? (
+            <div style={{textAlign:'center',padding:'48px 0'}}>
+              <div style={{fontSize:56,marginBottom:16}}>✓</div>
+              <h2 style={{margin:'0 0 10px',fontSize:28,fontWeight:600}}>¡Inversión confirmada!</h2>
+              <p style={{color:'var(--ic-text-2)',fontSize:16,margin:'0 0 8px'}}>
+                Invertiste <b className="ic-num">USD {amount.toLocaleString()}</b> en <b>{p.name}</b>.
+              </p>
+              <p style={{color:'var(--ic-text-2)',fontSize:14,margin:'0 0 28px'}}>
+                Retorno anual estimado: <span className="ic-num" style={{color:'var(--ic-gold)',fontWeight:600}}>USD {roiAmt}</span>
+              </p>
+              <div style={{display:'flex',gap:12,justifyContent:'center'}}>
+                <a href="dashboard.html" className="ic-btn ic-btn-primary">Ver mis inversiones →</a>
+                <button className="ic-btn ic-btn-ghost" onClick={onClose}>Seguir explorando</button>
+              </div>
             </div>
-            <div style={{textAlign:'right'}}>
-              <div className="ic-mono" style={{fontSize:10,color:'var(--ic-text-2)'}}>ROI EST. ANUAL</div>
-              <div className="ic-num" style={{fontSize:36,fontWeight:600,letterSpacing:'-.025em',color:'var(--ic-gold)'}}>{p.roi}%</div>
-            </div>
-          </div>
-
-          <div className="ic-stat-grid">
-            <div><div className="k">Monto total</div><div className="v ic-num">USD {p.total}</div></div>
-            <div><div className="k">Mínimo</div><div className="v ic-num">USD {p.min}</div></div>
-            <div><div className="k">Plazo</div><div className="v">{p.term}</div></div>
-            <div><div className="k">Financiado</div><div className="v ic-num">{p.funded}%</div></div>
-          </div>
-
-          <div className="ic-ai-surface" style={{padding:'22px 26px',margin:'24px 0'}}>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-              <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-gold)',boxShadow:'0 0 0 3px rgba(201,168,76,.25)'}}/>
-              <span className="ic-mono" style={{color:'var(--ic-gold)',fontSize:10.5}}>ANÁLISIS IA · PROYECCIÓN DE RETORNO</span>
-            </div>
-            <p style={{fontSize:15,lineHeight:1.55,margin:0,position:'relative'}}>
-              Proyectamos un retorno acumulado de <b style={{color:'var(--ic-gold)'}}>~{(parseFloat(p.roi)*3).toFixed(0)}% en 3 años</b>, con base en la demanda logística de la zona, comparables de centros operativos cercanos y la trayectoria del desarrollador (calificación {p.developerRep}/5).
-            </p>
-          </div>
-
-          <div style={{display:'grid',gridTemplateColumns:'1.4fr 1fr',gap:32,marginTop:24}}>
-            <div>
-              <h3 style={{fontSize:16,fontWeight:600,marginBottom:16}}>Documentación del proyecto</h3>
-              {[
-                { name:"Plano arquitectónico", size:"4.2 MB · PDF" },
-                { name:"Estudio de factibilidad técnica", size:"2.8 MB · PDF" },
-                { name:"Habilitación municipal", size:"1.1 MB · PDF" },
-                { name:"Contrato de fideicomiso", size:"3.4 MB · PDF" },
-                { name:"Cronograma de obra", size:"680 KB · XLSX" },
-              ].map((d,i)=>(
-                <div key={i} className="doc-row">
-                  <div style={{display:'flex',alignItems:'center',gap:12}}>
-                    <div className="icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="1.7"/><path d="M14 2v6h6" stroke="currentColor" strokeWidth="1.7"/></svg>
-                    </div>
-                    <div>
-                      <div style={{fontWeight:500,fontSize:13.5}}>{d.name}</div>
-                      <div style={{fontSize:11.5,color:'var(--ic-text-2)',fontFamily:'var(--ic-mono)'}}>{d.size}</div>
-                    </div>
-                  </div>
-                  <a href="#" style={{fontSize:13,color:'var(--ic-burgundy)'}}>Descargar</a>
+          ) : (
+            <>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:24,marginBottom:24}}>
+                <div>
+                  <h2 style={{margin:'0 0 6px',fontSize:30,fontWeight:600,letterSpacing:'-.025em'}}>{p.name}</h2>
+                  <div style={{fontSize:14,color:'var(--ic-text-2)'}}>📍 {p.location}</div>
                 </div>
-              ))}
-
-              <h3 style={{fontSize:16,fontWeight:600,marginBottom:16,marginTop:32}}>Desarrollador</h3>
-              <div style={{display:'flex',gap:14,alignItems:'center',padding:'16px 18px',border:'1px solid var(--ic-line)',borderRadius:12}}>
-                <div className="ic-avatar" style={{width:48,height:48,fontSize:16}}>LS</div>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:600,fontSize:15}}>Logística Sur SRL</div>
-                  <div style={{fontSize:12.5,color:'var(--ic-text-2)',marginTop:2}}>{p.developerOps} proyectos · {p.term} promedio · 100% entrega en plazo</div>
-                  <div style={{display:'flex',gap:6,marginTop:8}}>
-                    <Reputation rating={p.developerRep} count={p.developerOps} compact/>
-                    <VerifiedBadge premium/>
-                  </div>
+                <div style={{textAlign:'right'}}>
+                  <div className="ic-mono" style={{fontSize:10,color:'var(--ic-text-2)'}}>ROI EST. ANUAL</div>
+                  <div className="ic-num" style={{fontSize:36,fontWeight:600,letterSpacing:'-.025em',color:'var(--ic-gold)'}}>{p.roi}%</div>
                 </div>
               </div>
 
-              <h3 style={{fontSize:16,fontWeight:600,marginBottom:8,marginTop:32}}>Co-inversores</h3>
-              <p style={{fontSize:13,color:'var(--ic-text-2)',marginBottom:14}}>147 inversores ya forman parte del proyecto (identidad anónima por privacidad).</p>
-              <div style={{display:'flex',gap:-4,alignItems:'center'}}>
-                {[1,2,3,4,5,6,7].map(i=>(
-                  <div key={i} className="ic-avatar" style={{width:36,height:36,fontSize:11,marginLeft:i===1?0:-8,background:i%2?'var(--ic-burgundy-soft)':'var(--ic-burgundy)',border:'2px solid #fff'}}>
-                    {String.fromCharCode(64+i)}{String.fromCharCode(70+i)}
-                  </div>
-                ))}
-                <span style={{marginLeft:8,fontSize:13,color:'var(--ic-text-2)'}}>+140 más</span>
+              <div className="ic-stat-grid">
+                <div><div className="k">Monto total</div><div className="v ic-num">USD {typeof p.total === 'number' ? p.total.toLocaleString() : p.total}</div></div>
+                <div><div className="k">Mínimo</div><div className="v ic-num">USD {typeof p.min === 'number' ? p.min.toLocaleString() : p.min}</div></div>
+                <div><div className="k">Plazo</div><div className="v">{p.term}</div></div>
+                <div>
+                  <div className="k">Financiado</div>
+                  <div className="v ic-num">{p.funded}%</div>
+                  <div className="progress" style={{marginTop:6}}><div style={{width:Math.min(p.funded,100)+'%'}}/></div>
+                </div>
               </div>
-            </div>
 
-            <div>
-              <div style={{position:'sticky',top:24,background:'var(--ic-bg-2)',border:'1px solid var(--ic-line)',borderRadius:14,padding:24}}>
-                <div className="ic-mono" style={{fontSize:10,color:'var(--ic-text-2)',marginBottom:10}}>SIMULAR INVERSIÓN</div>
-                <label className="ic-label">Monto (USD)</label>
-                <input className="ic-input ic-num" type="number" value={amount} onChange={e=>setAmount(parseInt(e.target.value)||0)}/>
+              <div className="ic-ai-surface" style={{padding:'22px 26px',margin:'24px 0'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                  <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-gold)',boxShadow:'0 0 0 3px rgba(201,168,76,.25)'}}/>
+                  <span className="ic-mono" style={{color:'var(--ic-gold)',fontSize:10.5}}>ANÁLISIS IA · PROYECCIÓN DE RETORNO</span>
+                </div>
+                <p style={{fontSize:15,lineHeight:1.55,margin:0,position:'relative'}}>
+                  {p.description ||
+                    `Proyectamos un retorno acumulado de ~${(parseFloat(p.roi)*3).toFixed(0)}% en 3 años, con base en la demanda logística de la zona y la trayectoria del desarrollador.`}
+                </p>
+              </div>
 
-                <input type="range" min="500" max="50000" step="500" value={amount}
-                  onChange={e=>setAmount(parseInt(e.target.value))}
-                  style={{width:'100%',marginTop:14}}/>
-
-                <div style={{display:'flex',gap:6,marginTop:8}}>
-                  {[500,1000,5000,10000].map(v=>(
-                    <button key={v} onClick={()=>setAmount(v)}
-                      className="ic-btn ic-btn-sm"
-                      style={{flex:1,padding:'6px 0',justifyContent:'center',
-                        background: amount===v ? 'var(--ic-burgundy)' : '#fff',
-                        color: amount===v ? '#fff' : 'var(--ic-text)',
-                        borderColor: amount===v ? 'var(--ic-burgundy)' : 'var(--ic-line)'
-                      }}>${v.toLocaleString()}</button>
+              <div style={{display:'grid',gridTemplateColumns:'1.4fr 1fr',gap:32,marginTop:24}}>
+                <div>
+                  <h3 style={{fontSize:16,fontWeight:600,marginBottom:16}}>Documentación del proyecto</h3>
+                  {[
+                    { name:"Plano arquitectónico", size:"4.2 MB · PDF" },
+                    { name:"Estudio de factibilidad técnica", size:"2.8 MB · PDF" },
+                    { name:"Habilitación municipal", size:"1.1 MB · PDF" },
+                    { name:"Contrato de fideicomiso", size:"3.4 MB · PDF" },
+                    { name:"Cronograma de obra", size:"680 KB · XLSX" },
+                  ].map((d,i)=>(
+                    <div key={i} className="doc-row">
+                      <div style={{display:'flex',alignItems:'center',gap:12}}>
+                        <div className="icon">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="1.7"/><path d="M14 2v6h6" stroke="currentColor" strokeWidth="1.7"/></svg>
+                        </div>
+                        <div>
+                          <div style={{fontWeight:500,fontSize:13.5}}>{d.name}</div>
+                          <div style={{fontSize:11.5,color:'var(--ic-text-2)',fontFamily:'var(--ic-mono)'}}>{d.size}</div>
+                        </div>
+                      </div>
+                      <a href="#" style={{fontSize:13,color:'var(--ic-burgundy)'}}>Descargar</a>
+                    </div>
                   ))}
                 </div>
 
-                <div style={{marginTop:22,padding:'14px 16px',background:'#fff',borderRadius:10}}>
-                  <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:8}}>
-                    <span style={{color:'var(--ic-text-2)'}}>Retorno anual est.</span>
-                    <span className="ic-num" style={{fontWeight:600,color:'var(--ic-gold)'}}>USD {roi}</span>
-                  </div>
-                  <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:8}}>
-                    <span style={{color:'var(--ic-text-2)'}}>Retorno a 3 años</span>
-                    <span className="ic-num" style={{fontWeight:600}}>USD {(parseFloat(roi)*3).toFixed(0)}</span>
-                  </div>
-                  <div style={{display:'flex',justifyContent:'space-between',fontSize:13,paddingTop:8,borderTop:'1px solid var(--ic-line)'}}>
-                    <span style={{color:'var(--ic-text-2)'}}>Plazo</span>
-                    <span style={{fontWeight:500}}>{p.term}</span>
+                <div>
+                  <div style={{position:'sticky',top:24,background:'var(--ic-bg-2)',border:'1px solid var(--ic-line)',borderRadius:14,padding:24}}>
+                    <div className="ic-mono" style={{fontSize:10,color:'var(--ic-text-2)',marginBottom:10}}>INVERTIR EN ESTE PROYECTO</div>
+                    <label className="ic-label">Monto (USD)</label>
+                    <input className="ic-input ic-num" type="number" value={amount}
+                      onChange={e=>setAmount(parseInt(e.target.value)||0)}
+                      min={p.min||500}/>
+
+                    <input type="range" min={p.min||500} max="50000" step="500" value={amount}
+                      onChange={e=>setAmount(parseInt(e.target.value))}
+                      style={{width:'100%',marginTop:14}}/>
+
+                    <div style={{display:'flex',gap:6,marginTop:8}}>
+                      {[p.min||500, 1000, 5000, 10000].filter((v,i,a)=>a.indexOf(v)===i).map(v=>(
+                        <button key={v} onClick={()=>setAmount(v)}
+                          className="ic-btn ic-btn-sm"
+                          style={{flex:1,padding:'6px 0',justifyContent:'center',
+                            background: amount===v ? 'var(--ic-burgundy)' : '#fff',
+                            color: amount===v ? '#fff' : 'var(--ic-text)',
+                            borderColor: amount===v ? 'var(--ic-burgundy)' : 'var(--ic-line)'
+                          }}>${v.toLocaleString()}</button>
+                      ))}
+                    </div>
+
+                    <div style={{marginTop:22,padding:'14px 16px',background:'#fff',borderRadius:10}}>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:8}}>
+                        <span style={{color:'var(--ic-text-2)'}}>Retorno anual est.</span>
+                        <span className="ic-num" style={{fontWeight:600,color:'var(--ic-gold)'}}>USD {roiAmt}</span>
+                      </div>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:8}}>
+                        <span style={{color:'var(--ic-text-2)'}}>Retorno a 3 años</span>
+                        <span className="ic-num" style={{fontWeight:600}}>USD {(parseFloat(roiAmt)*3).toFixed(0)}</span>
+                      </div>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:13,paddingTop:8,borderTop:'1px solid var(--ic-line)'}}>
+                        <span style={{color:'var(--ic-text-2)'}}>Plazo</span>
+                        <span style={{fontWeight:500}}>{p.term}</span>
+                      </div>
+                    </div>
+
+                    {error && <div style={{color:'var(--ic-danger)',fontSize:13,marginTop:10,textAlign:'center'}}>{error}</div>}
+
+                    <button className="ic-btn ic-btn-primary" style={{width:'100%',justifyContent:'center',marginTop:14,padding:14}}
+                      onClick={handleInvest} disabled={investing}>
+                      {investing ? 'Procesando...' : `Invertir USD ${amount.toLocaleString()}`}
+                    </button>
+                    <p style={{fontSize:11,color:'var(--ic-text-3)',margin:'10px 0 0',lineHeight:1.4,textAlign:'center'}}>
+                      La inversión está sujeta a la documentación y al fideicomiso del proyecto.
+                    </p>
                   </div>
                 </div>
-
-                <button className="ic-btn ic-btn-primary" style={{width:'100%',justifyContent:'center',marginTop:14,padding:14}}>
-                  Invertir USD {amount.toLocaleString()}
-                </button>
-                <p style={{fontSize:11,color:'var(--ic-text-3)',margin:'10px 0 0',lineHeight:1.4,textAlign:'center'}}>
-                  La inversión está sujeta a la documentación y al fideicomiso del proyecto. Ver términos.
-                </p>
               </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -312,6 +347,49 @@ function InvestPage() {
   const [t] = useIndTweaks();
   const [open, setOpen] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    try {
+      const ps = IndDB.getInvestProjects() || [];
+      setProjects(ps);
+    } catch(e) {
+      setProjects([]);
+    }
+    setLoading(false);
+  }, []);
+
+  // Reload a single project's funded% after investment
+  const handleInvested = (projectId) => {
+    try {
+      const updated = IndDB.getInvestProject(projectId);
+      if (updated) {
+        setProjects(prev => prev.map(p => p.id === projectId ? updated : p));
+      }
+      // also refresh open project
+      if (open && open.id === projectId) setOpen(updated || open);
+    } catch(e) {}
+  };
+
+  const STATUS_MAP = {
+    construccion: "En construcción",
+    preventa:     "Pre-venta",
+    operativo:    "Operativo",
+  };
+
+  const filtered = filter === "all"
+    ? projects
+    : projects.filter(p => p.status === STATUS_MAP[filter]);
+
+  // Aggregate stats
+  const totalInvested = projects.reduce((s,p) => {
+    const t = typeof p.total === 'number' ? p.total : parseFloat(String(p.total).replace(/[^0-9.]/g,'')) || 0;
+    return s + t * (p.funded/100);
+  }, 0);
+  const avgRoi = projects.length
+    ? (projects.reduce((s,p)=>s+parseFloat(p.roi||0),0)/projects.length).toFixed(1)
+    : 0;
 
   return (
     <div className="ic-page" data-screen-label="05 Inversión fraccionada">
@@ -333,10 +411,10 @@ function InvestPage() {
           </p>
 
           <div className="stat-row">
-            <div><div className="k">Proyectos activos</div><div className="v ic-num">14</div></div>
-            <div><div className="k">USD invertido</div><div className="v ic-num">$28.4M</div></div>
-            <div><div className="k">Inversores</div><div className="v ic-num">2.137</div></div>
-            <div><div className="k">ROI promedio</div><div className="v ic-num" style={{color:'var(--ic-gold)'}}>14.3%</div></div>
+            <div><div className="k">Proyectos activos</div><div className="v ic-num">{projects.length}</div></div>
+            <div><div className="k">USD invertido</div><div className="v ic-num">${(totalInvested/1000000).toFixed(1)}M</div></div>
+            <div><div className="k">ROI promedio</div><div className="v ic-num" style={{color:'var(--ic-gold)'}}>{avgRoi}%</div></div>
+            <div><div className="k">Desde</div><div className="v ic-num">USD 500</div></div>
           </div>
         </div>
       </section>
@@ -357,13 +435,21 @@ function InvestPage() {
             </div>
           </div>
 
-          <div className="project-grid">
-            {INVEST_PROJECTS.map(p => <ProjectCard key={p.id} p={p} onOpen={setOpen}/>)}
-          </div>
+          {loading ? (
+            <div style={{textAlign:'center',padding:'64px 0',color:'var(--ic-text-2)'}}>Cargando proyectos...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{textAlign:'center',padding:'64px 0',color:'var(--ic-text-2)'}}>
+              No hay proyectos en esta categoría por ahora.
+            </div>
+          ) : (
+            <div className="project-grid">
+              {filtered.map(p => <ProjectCard key={p.id} p={p} onOpen={setOpen}/>)}
+            </div>
+          )}
         </div>
       </section>
 
-      {open && <ProjectDetail p={open} onClose={()=>setOpen(null)}/>}
+      {open && <ProjectDetail p={open} onClose={()=>setOpen(null)} onInvested={handleInvested}/>}
 
       <Footer/>
     </div>
