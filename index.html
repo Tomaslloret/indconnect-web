@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>INDCONNECT · Marketplace industrial con IA</title>
+<link rel="stylesheet" href="styles.css"/>
+
+<script>
+  // EDITMODE block — host can rewrite this. Tweak state actually persists in localStorage
+  // (see tweaks.jsx); this stub satisfies the protocol contract.
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "burgundy": "#6B0F1A",
+    "goldOn": true,
+    "density": "regular",
+    "heroVar": "split",
+    "logoVar": 1
+  }/*EDITMODE-END*/;
+</script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<style>
+  .hero-bord {
+    background:
+      radial-gradient(60% 70% at 90% 0%, rgba(201,168,76,.20), transparent 55%),
+      radial-gradient(80% 60% at 0% 100%, rgba(0,0,0,.32), transparent 60%),
+      linear-gradient(180deg, var(--ic-burgundy) 0%, var(--ic-burgundy-deep) 100%);
+    color:#fff; position:relative; overflow:hidden;
+  }
+  .hero-grid-bg {
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(80% 80% at 50% 30%, #000 30%, transparent 80%);
+    -webkit-mask-image: radial-gradient(80% 80% at 50% 30%, #000 30%, transparent 80%);
+    pointer-events:none;
+  }
+  .ai-search {
+    background:#fff; border-radius:14px; box-shadow: 0 24px 60px -16px rgba(0,0,0,.45);
+    padding:6px; display:flex; align-items:center; gap:4px;
+  }
+  .ai-search input {
+    flex:1; background:transparent; border:0; outline:0;
+    padding:14px 14px; font:inherit; font-size:15px; color:var(--ic-ink);
+  }
+  .ai-search .chip {
+    padding:8px 12px; font-size:12.5px; font-family:var(--ic-mono);
+    letter-spacing:.06em; text-transform:uppercase;
+    border-radius:8px; color:var(--ic-text-2); background:var(--ic-bg-2);
+    border:1px solid var(--ic-line);
+  }
+  .ai-search .ai-icon {
+    width:36px; height:36px; border-radius:8px;
+    background:linear-gradient(135deg,var(--ic-burgundy),#1C1D23);
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    margin-left:6px;
+  }
+  .ai-suggest {
+    display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;
+  }
+  .ai-suggest button {
+    padding:8px 14px; font-size:13px;
+    background:rgba(255,255,255,.10);
+    border:1px solid rgba(255,255,255,.18);
+    color:#fff; border-radius:999px;
+    backdrop-filter: blur(8px);
+  }
+  .ai-suggest button:hover { background:rgba(255,255,255,.18); }
+
+  .cat-card {
+    position:relative; overflow:hidden;
+    border-radius:14px; aspect-ratio:4/5;
+    background:var(--ic-ink); color:#fff;
+    transition: transform .25s ease;
+  }
+  .cat-card:hover { transform: translateY(-4px); }
+  .cat-card .photo {
+    position:absolute; inset:0;
+    background: repeating-linear-gradient(135deg, #2A2B31 0 14px, #1F2026 14px 28px);
+  }
+  .cat-card::after {
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg, transparent 30%, rgba(0,0,0,.65) 100%);
+  }
+  .cat-card .body { position:absolute; inset:0; padding:18px; display:flex; flex-direction:column; justify-content:space-between; z-index:1; }
+
+  .diff-card { padding: 36px 32px; border-radius:16px; background:var(--ic-card); border:1px solid var(--ic-line); height:100%; }
+  .diff-card .num {
+    font-family:var(--ic-mono); font-size:11px; letter-spacing:.18em;
+    color:var(--ic-burgundy);
+  }
+  .diff-card h3 { margin: 14px 0 10px; font-size: 22px; font-weight:600; letter-spacing:-.02em; }
+  .diff-card p { color:var(--ic-text); font-size:14.5px; line-height:1.55; margin:0; }
+  .diff-card .icon {
+    width:44px; height:44px; border-radius:10px;
+    background: var(--ic-burgundy-tint); color:var(--ic-burgundy);
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .step-num {
+    width:28px;height:28px;border-radius:50%;
+    background:var(--ic-burgundy);color:#fff;display:flex;align-items:center;justify-content:center;
+    font-family:var(--ic-mono);font-size:12px;font-weight:600;
+  }
+
+  .map-preview {
+    position:relative; aspect-ratio: 16/9; border-radius: 20px; overflow:hidden;
+    background: #1A1B21;
+    border:1px solid rgba(255,255,255,.08);
+  }
+  .map-preview svg { display:block; width:100%; height:100%; }
+  .pin {
+    position:absolute; width:14px; height:14px; border-radius:50%;
+    background:var(--ic-gold); transform:translate(-50%,-50%);
+    box-shadow: 0 0 0 4px rgba(201,168,76,.20), 0 0 0 12px rgba(201,168,76,.08);
+  }
+  .pin.burg { background:var(--ic-burgundy-soft); box-shadow: 0 0 0 4px rgba(139,31,46,.30), 0 0 0 12px rgba(139,31,46,.10); }
+
+  .featured-grid {
+    display:grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+  }
+  @media (max-width: 1024px) { .featured-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 540px)  { .featured-grid { grid-template-columns: 1fr; } }
+
+  .cat-grid { display:grid; grid-template-columns: repeat(5,1fr); gap: 14px; }
+  @media (max-width: 900px) { .cat-grid { grid-template-columns: repeat(2,1fr); } }
+
+  .diff-grid { display:grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+  @media (max-width: 1024px) { .diff-grid { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 560px)  { .diff-grid { grid-template-columns: 1fr; } }
+
+  .step-grid { display:grid; grid-template-columns: repeat(3,1fr); gap: 32px; }
+  @media (max-width: 800px) { .step-grid { grid-template-columns: 1fr; } }
+
+  .hero-big {
+    font-size: clamp(60px, 9vw, 148px);
+    font-weight: 600;
+    letter-spacing: -0.045em;
+    line-height: 0.95;
+  }
+
+  .live-row {
+    display:flex; gap:24px; padding: 18px 24px;
+    background: rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.10);
+    border-radius:12px;
+    backdrop-filter:blur(12px);
+    font-size:13px;
+  }
+  .live-row .k { color:rgba(255,255,255,.55); font-family:var(--ic-mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:4px; }
+  .live-row .v { font-weight:600; letter-spacing:-.015em; font-size:17px; }
+
+  .marquee {
+    display:flex; gap:48px; overflow:hidden; padding:18px 0;
+    border-top:1px solid var(--ic-line); border-bottom:1px solid var(--ic-line);
+    font-family:var(--ic-mono); font-size:11.5px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ic-text-2);
+  }
+  .marquee span { white-space:nowrap; flex-shrink:0; display:flex; align-items:center; gap:48px; }
+  .marquee span::before { content:"●"; color:var(--ic-burgundy); font-size:8px; }
+  .marquee-track { display:flex; gap:48px; animation: scroll-x 40s linear infinite; }
+  @keyframes scroll-x { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="tweaks.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect } = React;
+
+const AI_SUGGESTIONS = [
+  "Galpón cerca del puerto con acceso para camiones",
+  "Terreno industrial subvaluado en Bahía Blanca",
+  "Inversión fraccionada con retorno > 12%",
+  "Nave alimentaria habilitada · 2.000 m²",
+];
+
+function AISearchHero() {
+  const [q, setQ] = useState("");
+  return (
+    <div>
+      <div className="ai-search">
+        <div className="ai-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor"/>
+            <circle cx="19" cy="5" r="1.5" fill="currentColor"/>
+          </svg>
+        </div>
+        <input
+          value={q} onChange={e=>setQ(e.target.value)}
+          placeholder="Describí lo que buscás en lenguaje natural..."/>
+        <span className="chip">VENTA · ALQUILER · POZO</span>
+        <a href="search.html" className="ic-btn ic-btn-primary" style={{padding:'12px 18px'}}>
+          Buscar
+        </a>
+      </div>
+      <div className="ai-suggest">
+        <span style={{fontSize:11.5,fontFamily:'var(--ic-mono)',letterSpacing:'.14em',textTransform:'uppercase',color:'rgba(255,255,255,.55)',alignSelf:'center'}}>Sugerencias IA →</span>
+        {AI_SUGGESTIONS.map((s,i)=>(
+          <button key={i} onClick={()=>setQ(s)}>{s}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HeroSplit({ logoVar }) {
+  return (
+    <section className="hero-bord">
+      <div className="hero-grid-bg"/>
+      <div className="ic-wrap" style={{position:'relative',paddingTop:80,paddingBottom:96}}>
+        <div style={{display:'grid',gridTemplateColumns:'1.2fr 1fr',gap:64,alignItems:'end'}}>
+          <div>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:24,opacity:.85}}>
+              <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-gold)',boxShadow:'0 0 0 3px rgba(201,168,76,.25)'}}/>
+              <span className="ic-mono" style={{color:'rgba(255,255,255,.75)',fontSize:11}}>Proptech industrial · Bahía Blanca</span>
+            </div>
+            <h1 className="ic-h1" style={{maxWidth:780,color:'#fff'}}>
+              El marketplace del<br/>
+              <span style={{color:'var(--ic-gold)'}}>real estate industrial</span>,<br/>
+              con IA integrada.
+            </h1>
+            <p style={{maxWidth:560,fontSize:17,lineHeight:1.5,marginTop:24,color:'rgba(255,255,255,.78)'}}>
+              Galpones, naves, terrenos y centros logísticos. Análisis predictivo, oportunidades detectadas y reputación verificada, en una sola plataforma.
+            </p>
+            <div style={{marginTop:36}}>
+              <AISearchHero/>
+            </div>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:14}}>
+            <div className="live-row">
+              <div><div className="k">Propiedades activas</div><div className="v ic-num">1.847</div></div>
+              <div><div className="k">Vendedores verificados</div><div className="v ic-num">312</div></div>
+              <div><div className="k">USD invertido (BETA)</div><div className="v ic-num">$28.4M</div></div>
+            </div>
+            <div className="map-preview">
+              <svg viewBox="0 0 400 225" preserveAspectRatio="none">
+                <defs>
+                  <pattern id="grid-pv" width="20" height="20" patternUnits="userSpaceOnUse">
+                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="1"/>
+                  </pattern>
+                  <radialGradient id="zone-hot" cx="65%" cy="55%" r="20%">
+                    <stop offset="0%" stopColor="rgba(201,168,76,.55)"/>
+                    <stop offset="100%" stopColor="rgba(201,168,76,0)"/>
+                  </radialGradient>
+                  <radialGradient id="zone-warm" cx="35%" cy="65%" r="25%">
+                    <stop offset="0%" stopColor="rgba(139,31,46,.55)"/>
+                    <stop offset="100%" stopColor="rgba(139,31,46,0)"/>
+                  </radialGradient>
+                </defs>
+                <rect width="400" height="225" fill="url(#grid-pv)"/>
+                <rect width="400" height="225" fill="url(#zone-hot)"/>
+                <rect width="400" height="225" fill="url(#zone-warm)"/>
+                {/* coastline */}
+                <path d="M0,140 C60,130 120,150 200,135 C280,120 340,160 400,150 L400,225 L0,225 Z" fill="rgba(20,22,28,.55)"/>
+                <path d="M0,140 C60,130 120,150 200,135 C280,120 340,160 400,150" stroke="rgba(255,255,255,.18)" fill="none"/>
+                {/* zone labels */}
+                <text x="240" y="120" fill="rgba(255,255,255,.5)" fontSize="8" fontFamily="Geist Mono">PUERTO ING. WHITE</text>
+                <text x="100" y="80" fill="rgba(255,255,255,.5)" fontSize="8" fontFamily="Geist Mono">PARQUE INDUSTRIAL</text>
+              </svg>
+              <div className="pin" style={{top:'55%',left:'66%'}}/>
+              <div className="pin burg" style={{top:'42%',left:'30%'}}/>
+              <div className="pin" style={{top:'70%',left:'48%'}}/>
+              <div style={{position:'absolute',top:14,left:14,padding:'6px 10px',background:'rgba(20,22,28,.6)',borderRadius:6,fontSize:10.5,fontFamily:'var(--ic-mono)',letterSpacing:'.14em',textTransform:'uppercase',color:'#fff'}}>
+                Mapa IA · Live
+              </div>
+              <a href="map.html" style={{position:'absolute',bottom:14,right:14,padding:'10px 14px',background:'#fff',color:'var(--ic-ink)',borderRadius:8,fontSize:13,fontWeight:500}}>
+                Abrir mapa →
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HeroMinimal() {
+  return (
+    <section style={{background:'var(--ic-bg)',borderBottom:'1px solid var(--ic-line)'}}>
+      <div className="ic-wrap" style={{padding:'120px 32px 80px',textAlign:'center',maxWidth:980}}>
+        <div style={{display:'inline-flex',alignItems:'center',gap:10,marginBottom:32,padding:'8px 14px',background:'var(--ic-burgundy-tint)',borderRadius:999,color:'var(--ic-burgundy)'}}>
+          <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-burgundy)'}}/>
+          <span className="ic-mono" style={{fontSize:11}}>Beta abierta · Bahía Blanca</span>
+        </div>
+        <h1 className="ic-h1" style={{maxWidth:900,margin:'0 auto'}}>
+          Real estate industrial,<br/>
+          <span style={{color:'var(--ic-burgundy)'}}>operado con IA.</span>
+        </h1>
+        <p style={{maxWidth:640,margin:'24px auto 0',fontSize:18,color:'var(--ic-text)',lineHeight:1.5}}>
+          Galpones, naves, terrenos y centros logísticos. Encontrá, analizá e invertí en propiedades industriales con datos de mercado en tiempo real.
+        </p>
+        <div style={{maxWidth:720,margin:'40px auto 0'}}>
+          <AISearchHero/>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HeroBigType() {
+  return (
+    <section style={{background:'#0F1014',color:'#fff',position:'relative',overflow:'hidden'}}>
+      <div className="hero-grid-bg"/>
+      <div className="ic-wrap" style={{position:'relative',paddingTop:96,paddingBottom:88}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:24,marginBottom:24,flexWrap:'wrap'}}>
+          <div className="ic-mono" style={{color:'rgba(255,255,255,.55)'}}>INDUSTRIAL · LOGÍSTICA · INVERSIÓN</div>
+          <div className="ic-mono" style={{color:'rgba(255,255,255,.55)'}}>BAHÍA BLANCA → ARGENTINA</div>
+        </div>
+        <h1 className="hero-big" style={{color:'#fff'}}>
+          Encontrá<br/>
+          <span style={{color:'var(--ic-gold)'}}>el galpón</span> antes<br/>
+          que el mercado<br/>lo valore.
+        </h1>
+        <div style={{maxWidth:720,marginTop:48}}>
+          <AISearchHero/>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Categorías ─── */
+const CATEGORIES = [
+  { t:"Galpones",          n:"428", label:"GALPÓN MEDIANO" },
+  { t:"Naves Industriales",n:"312", label:"NAVE INDUSTRIAL" },
+  { t:"Terrenos",          n:"567", label:"TERRENO INDUSTRIAL" },
+  { t:"Centros Logísticos",n:"84",  label:"CENTRO LOGÍSTICO" },
+  { t:"Locales Industriales", n:"196", label:"LOCAL INDUSTRIAL" },
+];
+
+function Categories() {
+  return (
+    <section className="ic-section" style={{paddingTop:96,paddingBottom:64}}>
+      <div className="ic-wrap">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:32,flexWrap:'wrap',gap:16}}>
+          <div>
+            <div className="ic-eyebrow" style={{marginBottom:10}}>Categorías</div>
+            <h2 className="ic-h2">Explorá por tipo de propiedad</h2>
+          </div>
+          <a href="search.html" className="ic-btn ic-btn-ghost">Ver todas las propiedades →</a>
+        </div>
+        <div className="cat-grid">
+          {CATEGORIES.map(c=>(
+            <a key={c.t} href="search.html" className="cat-card">
+              <div className="photo"/>
+              <div className="ic-grain"/>
+              <div className="body">
+                <span className="ic-mono" style={{fontSize:10.5,color:'rgba(255,255,255,.55)'}}>{c.label}</span>
+                <div>
+                  <div style={{fontSize:11,fontFamily:'var(--ic-mono)',letterSpacing:'.14em',color:'var(--ic-gold)',marginBottom:6}}>{c.n} ACTIVAS</div>
+                  <div style={{fontSize:20,fontWeight:600,letterSpacing:'-.02em'}}>{c.t}</div>
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Featured ─── */
+function Featured() {
+  return (
+    <section className="ic-section" style={{paddingTop:64}}>
+      <div className="ic-wrap">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:24,flexWrap:'wrap',gap:16}}>
+          <div>
+            <div className="ic-eyebrow" style={{marginBottom:10}}>
+              <AILabel>Selección IA · esta semana</AILabel>
+            </div>
+            <h2 className="ic-h2" style={{marginTop:8}}>Propiedades destacadas</h2>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <button className="ic-btn ic-btn-secondary">Ordenar: Relevancia IA ▾</button>
+            <a href="search.html" className="ic-btn ic-btn-ghost">Ver más →</a>
+          </div>
+        </div>
+        <div className="featured-grid">
+          {PROPS.slice(0,4).map(p => <PropertyCard key={p.id} p={p}/>)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Diferenciales ─── */
+const DIFFS = [
+  { num:"01", title:"Exclusivo segmento industrial",
+    body:"No somos un portal genérico: solo galpones, naves, terrenos, centros logísticos y locales industriales. Curado por especialistas.",
+    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 21V8L9 4L15 8V21M15 13H21V21M9 21V14H13V21" stroke="currentColor" strokeWidth="1.7"/></svg> },
+  { num:"02", title:"IA que analiza el mercado por vos",
+    body:"Modelo predictivo que cruza obras públicas, tendencias logísticas, habilitaciones municipales y crecimiento demográfico para proyectar valor a 12 y 36 meses.",
+    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2L14 8L20 10L14 12L12 18L10 12L4 10L10 8L12 2Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/></svg> },
+  { num:"03", title:"Sistema de reputación verificado",
+    body:"Cada vendedor tiene historial público, operaciones cerradas, reseñas verificadas y badge de identidad validada. Sabés con quién operás.",
+    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2L14.5 8.5L21 9L16 13.5L17.5 20L12 16.5L6.5 20L8 13.5L3 9L9.5 8.5L12 2Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/></svg> },
+  { num:"04", title:"Inversión fraccionada en proyectos",
+    body:"Entrá a desarrollos industriales desde USD 500. Co-inversión transparente, documentación abierta y retorno proyectado por nuestro modelo.",
+    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 17L9 11L13 15L21 7M21 7H15M21 7V13" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round"/></svg> },
+];
+
+function Differentials() {
+  return (
+    <section className="ic-section" style={{background:'var(--ic-bg-2)'}}>
+      <div className="ic-wrap">
+        <div style={{maxWidth:680,marginBottom:48}}>
+          <div className="ic-eyebrow" style={{marginBottom:14}}>¿Por qué IndConnect?</div>
+          <h2 className="ic-h2">Cuatro cosas que no vas a encontrar en un portal inmobiliario tradicional.</h2>
+        </div>
+        <div className="diff-grid">
+          {DIFFS.map(d => (
+            <div key={d.num} className="diff-card">
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:32}}>
+                <div className="icon">{d.icon}</div>
+                <span className="num">{d.num}</span>
+              </div>
+              <h3>{d.title}</h3>
+              <p>{d.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Reputation showcase ─── */
+function ReputationShowcase() {
+  return (
+    <section className="ic-section" style={{background:'#FFFFFF',paddingTop:48,paddingBottom:48,borderTop:'1px solid var(--ic-line)',borderBottom:'1px solid var(--ic-line)'}}>
+      <div className="ic-wrap">
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:64,alignItems:'center'}} className="rep-grid">
+          <div>
+            <div className="ic-eyebrow" style={{marginBottom:10}}>Sistema de reputación</div>
+            <h2 className="ic-h2">Sabés con quién operás. Siempre.</h2>
+            <p style={{color:'var(--ic-text)',fontSize:15.5,maxWidth:480,marginTop:16,lineHeight:1.6}}>
+              Cada vendedor en IndConnect tiene un perfil público auditable con calificaciones, reseñas verificadas, tiempo de respuesta y badges de identidad. Sin agentes fantasma. Sin teléfonos que no atienden.
+            </p>
+            <a href="search.html" className="ic-btn ic-btn-secondary" style={{marginTop:24}}>Ver vendedores destacados →</a>
+          </div>
+          <div className="ic-card" style={{padding:0}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr'}}>
+              {[
+                { name:"Logística Sur SRL", ops:48, rating:4.9, t:"2h", v:true, p:true },
+                { name:"Grupo Inmob. Pampa",ops:34, rating:4.8, t:"1h", v:true, p:true },
+                { name:"Naves del Atlántico",ops:21, rating:4.6, t:"4h", v:true, p:false },
+                { name:"M. Fernández — Independiente",ops:12, rating:4.4, t:"6h", v:true, p:false },
+              ].map((s,i)=>(
+                <div key={i} style={{padding:'24px 24px',borderRight:i%2===0?'1px solid var(--ic-line)':'',borderBottom:i<2?'1px solid var(--ic-line)':''}}>
+                  <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}>
+                    <div className="ic-avatar">{s.name.split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
+                    <div>
+                      <div style={{fontWeight:600,fontSize:14}}>{s.name}</div>
+                      <div style={{fontSize:12,color:'var(--ic-text-2)'}}>{s.ops} operaciones · resp. {s.t}</div>
+                    </div>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                    <Reputation rating={s.rating} count={s.ops} compact/>
+                  </div>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    {s.v && <VerifiedBadge/>}
+                    {s.p && <VerifiedBadge premium/>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── How it works ─── */
+function HowItWorks() {
+  return (
+    <section className="ic-section" style={{background:'var(--ic-ink)',color:'#fff'}}>
+      <div className="ic-wrap">
+        <div style={{marginBottom:48}}>
+          <div className="ic-eyebrow" style={{marginBottom:14,color:'rgba(255,255,255,.5)'}}>Cómo funciona</div>
+          <h2 className="ic-h2" style={{color:'#fff',maxWidth:680}}>De buscar a cerrar en tres pasos.</h2>
+        </div>
+        <div className="step-grid">
+          {[
+            { n:"01", t:"Describí qué buscás", b:"Escribilo en lenguaje natural o usá los filtros. Nuestra IA interpreta lo que necesitás y trae propiedades reales que coinciden, ordenadas por relevancia." },
+            { n:"02", t:"Analizá con IA", b:"Cada propiedad viene con análisis de zona, proyección de valor a 12/36 meses y comparables del mercado. Sabés si pagás bien o si estás frente a una oportunidad subvaluada." },
+            { n:"03", t:"Operá con confianza", b:"Contactá vendedores verificados, consultá su reputación pública y cerrá. O entrá como co-inversor en un proyecto fraccionado desde USD 500." },
+          ].map(s => (
+            <div key={s.n}>
+              <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:18}}>
+                <span className="step-num">{s.n}</span>
+                <span className="ic-mono" style={{color:'rgba(255,255,255,.5)'}}>PASO</span>
+              </div>
+              <h3 style={{fontSize:22,fontWeight:600,letterSpacing:'-.02em',marginBottom:12}}>{s.t}</h3>
+              <p style={{color:'rgba(255,255,255,.65)',fontSize:14.5,lineHeight:1.6,margin:0}}>{s.b}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{marginTop:64,display:'flex',gap:16,alignItems:'center'}}>
+          <a href="map.html" className="ic-btn ic-btn-primary ic-btn-lg" style={{background:'var(--ic-gold)',color:'#3a2a07'}}>Abrir el Mapa IA →</a>
+          <a href="search.html" className="ic-btn" style={{color:'#fff',border:'1px solid rgba(255,255,255,.2)'}}>Buscar propiedades</a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Marquee ─── */
+function Marquee() {
+  const items = [
+    "MAPA IA EN VIVO",
+    "1.847 PROPIEDADES ACTIVAS",
+    "USD 28.4M INVERTIDOS",
+    "312 VENDEDORES VERIFICADOS",
+    "PROYECCIÓN ZONAL A 36 MESES",
+    "OPERAMOS EN BAHÍA BLANCA Y AMBA",
+  ];
+  return (
+    <div className="marquee">
+      <div className="marquee-track">
+        {[...items, ...items].map((t,i)=>(
+          <span key={i}>{t}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── App ─── */
+function App() {
+  const [t] = useIndTweaks();
+  let Hero = HeroSplit;
+  if (t.heroVar === "minimal") Hero = HeroMinimal;
+  if (t.heroVar === "bigtype") Hero = HeroBigType;
+
+  return (
+    <div className="ic-page" data-screen-label="01 Landing">
+      <Header active="home" logoVariant={t.logoVar}/>
+      <Hero logoVar={t.logoVar}/>
+      <Marquee/>
+      <Categories/>
+      <Featured/>
+      <Differentials/>
+      <ReputationShowcase/>
+      <HowItWorks/>
+      <Footer/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
+window.addEventListener('load', () => mountTweaks({ showLogoVar:true, showHeroVar:true }));
+</script>
+</body>
+</html>

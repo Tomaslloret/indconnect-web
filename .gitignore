@@ -1,0 +1,4 @@
+design_extracted/
+node_modules/
+.vercel/
+.claude/

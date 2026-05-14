@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Galpón 1.800 m² · Puerto Ing. White · INDCONNECT</title>
+<link rel="stylesheet" href="styles.css"/>
+
+<script>
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "burgundy": "#6B0F1A",
+    "goldOn": true,
+    "density": "regular",
+    "heroVar": "split",
+    "logoVar": 1
+  }/*EDITMODE-END*/;
+</script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<style>
+  .gallery {
+    display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 4px;
+    height: 480px; border-radius: 14px; overflow: hidden;
+    margin-top: 20px;
+  }
+  .gallery > div { position: relative; }
+  .gallery > div:first-child { grid-row: span 2; }
+  .gallery .more {
+    position: absolute; bottom: 14px; right: 14px;
+    padding: 8px 12px; background: rgba(20,22,28,.85); color: #fff;
+    border-radius: 8px; font-size: 12.5px; backdrop-filter: blur(8px);
+  }
+
+  .detail-grid {
+    display: grid; grid-template-columns: 1fr 380px;
+    gap: 56px; padding: 40px 0 96px;
+  }
+  @media (max-width: 1000px) { .detail-grid { grid-template-columns: 1fr; } }
+
+  .spec-table {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    border-top: 1px solid var(--ic-line);
+  }
+  .spec-table > div {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--ic-line);
+    border-right: 1px solid var(--ic-line);
+  }
+  .spec-table > div:nth-child(2n) { border-right: 0; }
+  .spec-table .k { font-family: var(--ic-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ic-text-2); }
+  .spec-table .v { font-size: 16px; font-weight: 500; margin-top: 4px; }
+
+  .ai-card {
+    border-radius: 16px;
+    background: linear-gradient(180deg, #15161A 0%, #1C1D23 100%);
+    color: #fff; padding: 28px 30px;
+    position: relative; overflow: hidden;
+    margin: 32px 0;
+  }
+  .ai-card::before {
+    content:""; position:absolute; top:-120px; right:-120px; width: 280px; height: 280px;
+    background: radial-gradient(closest-side, rgba(201,168,76,.22), transparent 70%);
+  }
+  .ai-card .quote {
+    font-size: 19px; line-height: 1.45; letter-spacing: -.015em;
+    margin: 14px 0 24px; max-width: 700px; position: relative;
+  }
+  .ai-stats {
+    display: grid; grid-template-columns: repeat(3,1fr);
+    gap: 0; border-top: 1px solid rgba(255,255,255,.1);
+    position: relative;
+  }
+  .ai-stats > div {
+    padding: 18px 4px 0;
+    border-right: 1px solid rgba(255,255,255,.1);
+  }
+  .ai-stats > div:last-child { border-right: 0; }
+  .ai-stats .k { font-family: var(--ic-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.55); }
+  .ai-stats .v { font-size: 28px; font-weight: 600; letter-spacing: -.025em; margin-top: 6px; }
+
+  /* Sticky aside card */
+  .price-card {
+    background: #fff; border: 1px solid var(--ic-line); border-radius: 14px;
+    padding: 24px; position: sticky; top: 84px;
+  }
+  .seller-card {
+    background: #fff; border: 1px solid var(--ic-line); border-radius: 14px;
+    padding: 24px; margin-top: 16px;
+  }
+  .review {
+    padding: 16px 0; border-bottom: 1px solid var(--ic-line);
+  }
+  .review:last-child { border-bottom: 0; }
+
+  .mini-map {
+    position: relative; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden;
+    background: #1A1B21; border: 1px solid var(--ic-line);
+  }
+  .layer-toggles {
+    position: absolute; top: 12px; left: 12px;
+    display: flex; flex-direction: column; gap: 4px; z-index: 2;
+  }
+  .layer-toggles button {
+    padding: 6px 10px; font-size: 11px;
+    background: rgba(20,22,28,.85); color: #fff;
+    border: 1px solid rgba(255,255,255,.15); border-radius: 6px;
+    backdrop-filter: blur(8px); text-align: left;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .layer-toggles button.on { background: var(--ic-burgundy); border-color: var(--ic-burgundy); }
+  .layer-toggles button .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  .similar-grid {
+    display: grid; grid-template-columns: repeat(4,1fr); gap: 16px;
+    margin-top: 24px;
+  }
+  @media (max-width: 1024px) { .similar-grid { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 540px)  { .similar-grid { grid-template-columns: 1fr; } }
+
+  /* Thumb-strip on gallery */
+  .thumb-strip {
+    display: flex; gap: 6px; margin-top: 8px; overflow-x: auto;
+  }
+  .thumb-strip > div {
+    width: 96px; height: 64px; flex-shrink: 0;
+    border-radius: 6px; overflow: hidden; opacity: .7; cursor: default;
+  }
+  .thumb-strip > div.active { opacity: 1; outline: 2px solid var(--ic-burgundy); outline-offset: 2px; }
+
+  .breadcrumb {
+    display: flex; gap: 8px; align-items: center; font-size: 12.5px;
+    color: var(--ic-text-2); margin-top: 24px;
+  }
+  .breadcrumb a:hover { color: var(--ic-burgundy); }
+  .breadcrumb .sep { color: var(--ic-text-3); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="tweaks.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { useState } = React;
+
+function MiniMap({ layers, setLayers }) {
+  return (
+    <div className="mini-map">
+      <div className="layer-toggles">
+        {[
+          { id:"val", label:"Valor actual", c:"var(--ic-burgundy)" },
+          { id:"fut", label:"Valor futuro", c:"var(--ic-gold)" },
+          { id:"opp", label:"Oportunidades IA", c:"var(--ic-gold)" },
+        ].map(L => (
+          <button key={L.id} className={layers[L.id]?"on":""} onClick={()=>setLayers({...layers,[L.id]:!layers[L.id]})}>
+            <span className="dot" style={{background:L.c}}/>{L.label}
+          </button>
+        ))}
+      </div>
+      <svg viewBox="0 0 400 225" preserveAspectRatio="none" style={{position:'absolute',inset:0,width:'100%',height:'100%'}}>
+        <defs>
+          <pattern id="grid-mm" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,.05)" strokeWidth="1"/>
+          </pattern>
+        </defs>
+        <rect width="400" height="225" fill="url(#grid-mm)"/>
+        {layers.val && <polygon points="200,80 320,75 330,150 215,165" fill="rgba(107,15,26,.50)" stroke="rgba(107,15,26,.7)"/>}
+        {layers.fut && <polygon points="200,80 320,75 330,150 215,165" fill="none" stroke="rgba(201,168,76,.9)" strokeWidth="1.5" strokeDasharray="4,4"/>}
+        <path d="M0,180 C100,170 180,200 280,180 C340,168 380,200 400,190 L400,225 L0,225 Z" fill="rgba(20,22,28,.55)"/>
+        <path d="M0,180 C100,170 180,200 280,180 C340,168 380,200 400,190" stroke="rgba(255,255,255,.18)" fill="none"/>
+        <text x="240" y="105" fill="rgba(255,255,255,.6)" fontSize="9" fontFamily="Geist Mono">PUERTO ING. WHITE</text>
+        {layers.opp && <circle cx="270" cy="120" r="18" fill="rgba(201,168,76,.22)" stroke="rgba(201,168,76,.6)"/>}
+      </svg>
+      {/* property pin */}
+      <div style={{position:'absolute',top:'53%',left:'68%',transform:'translate(-50%,-100%)',zIndex:2}}>
+        <div style={{width:14,height:14,borderRadius:'50%',background:'var(--ic-burgundy)',border:'3px solid #fff',boxShadow:'0 4px 10px rgba(0,0,0,.35)'}}/>
+      </div>
+      <a href="map.html" style={{position:'absolute',bottom:12,right:12,padding:'8px 12px',background:'#fff',color:'var(--ic-ink)',borderRadius:6,fontSize:12,fontWeight:500}}>Mapa completo →</a>
+    </div>
+  );
+}
+
+function PropertyPage() {
+  const [t] = useIndTweaks();
+  const [layers, setLayers] = useState({ val:true, fut:true, opp:true });
+  const [activeImg, setActiveImg] = useState(0);
+
+  return (
+    <div className="ic-page" data-screen-label="04 Propiedad">
+      <Header active="search" logoVariant={t.logoVar}/>
+
+      <div className="ic-wrap">
+        <div className="breadcrumb">
+          <a href="index.html">Home</a>
+          <span className="sep">/</span>
+          <a href="search.html">Galpones</a>
+          <span className="sep">/</span>
+          <a href="search.html">Puerto Ing. White</a>
+          <span className="sep">/</span>
+          <span style={{color:'var(--ic-ink)'}}>Galpón 1.800 m² · acceso camiones</span>
+        </div>
+
+        <div className="gallery">
+          <div className="ic-photo" data-label="GALPÓN · VISTA EXTERIOR FRENTE"/>
+          <div className="ic-photo" data-label="INTERIOR PLANTA"/>
+          <div className="ic-photo" data-label="ACCESO CAMIONES"/>
+          <div className="ic-photo" data-label="OFICINAS"/>
+          <div className="ic-photo" data-label="VISTA AÉREA">
+            <div className="more">+8 fotos · 3 planos</div>
+          </div>
+        </div>
+
+        <div className="detail-grid">
+          <main>
+            <div style={{display:'flex',gap:8,marginBottom:14}}>
+              <span className="ic-badge ic-badge-ai"><span className="dot"/>IA destaca</span>
+              <span className="ic-badge ic-badge-verified">Verificado IndConnect</span>
+              <span className="ic-badge">Galpón</span>
+              <span className="ic-badge">VENTA</span>
+            </div>
+
+            <h1 className="ic-h2" style={{margin:'0 0 8px'}}>Galpón industrial 1.800 m² con acceso para camiones</h1>
+            <div style={{display:'flex',gap:16,alignItems:'center',color:'var(--ic-text-2)',fontSize:14,marginBottom:8}}>
+              <span>📍 Puerto Ing. White · Bahía Blanca</span>
+              <span>·</span>
+              <span>Publicado hace 6 días</span>
+              <span>·</span>
+              <span>1.247 vistas</span>
+            </div>
+
+            <div className="ai-card">
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-gold)',boxShadow:'0 0 0 3px rgba(201,168,76,.25)'}}/>
+                <span className="ic-mono" style={{color:'var(--ic-gold)',fontSize:11}}>ANÁLISIS DE PROPIEDAD · MODELO IA</span>
+              </div>
+              <p className="quote">
+                "Esta propiedad está en una zona con proyección de revalorización del <b style={{color:'var(--ic-gold)'}}>+22.4% en 36 meses</b> según nuestro modelo. El precio USD/m² está <b>~8% por debajo</b> de comparables recientes en Puerto Ing. White, marcándola como una oportunidad subvaluada."
+              </p>
+              <div className="ai-stats">
+                <div>
+                  <div className="k">Score IA</div>
+                  <div className="v ic-num" style={{color:'var(--ic-gold)'}}>92/100</div>
+                </div>
+                <div>
+                  <div className="k">Proy. 36m</div>
+                  <div className="v ic-num">+22.4%</div>
+                </div>
+                <div>
+                  <div className="k">Vs. comparables</div>
+                  <div className="v ic-num">−8%</div>
+                </div>
+              </div>
+            </div>
+
+            <h3 style={{fontSize:18,fontWeight:600,letterSpacing:'-.015em',margin:'8px 0 0'}}>Características</h3>
+            <div className="spec-table" style={{marginTop:16}}>
+              {[
+                ["Tipo","Galpón industrial"],
+                ["Superficie cubierta","1.800 m²"],
+                ["Superficie terreno","2.400 m²"],
+                ["Altura","9 m libres"],
+                ["Acceso camiones","Sí · doble portón"],
+                ["Estado","Excelente"],
+                ["Antigüedad","12 años"],
+                ["Servicios","Luz trifásica, agua, gas natural, fibra"],
+                ["Habilitación","Industrial categoría B"],
+                ["Modalidad","Venta directa"],
+              ].map(([k,v]) => (
+                <div key={k}>
+                  <div className="k">{k}</div>
+                  <div className="v">{v}</div>
+                </div>
+              ))}
+            </div>
+
+            <h3 style={{fontSize:18,fontWeight:600,letterSpacing:'-.015em',margin:'40px 0 12px'}}>Descripción</h3>
+            <div style={{fontSize:15,color:'var(--ic-text)',lineHeight:1.6,maxWidth:720}}>
+              <p style={{marginTop:0}}>
+                Galpón industrial de 1.800 m² cubiertos sobre terreno de 2.400 m² en Puerto Ingeniero White, a 2 km del acceso portuario. Doble portón de acceso para camiones de gran porte, playa de maniobras propia y 9 m libres de altura interior.
+              </p>
+              <p>
+                Instalación trifásica, oficinas administrativas de 120 m² independientes, sala de máquinas, vestuarios y baños habilitados. Habilitación industrial categoría B vigente. Estructura metálica con cubierta de chapa, pisos de hormigón armado de alta resistencia.
+              </p>
+              <p>
+                Ideal para operaciones de logística portuaria, almacenamiento o manufactura liviana. Zona consolidada con vecinos industriales de primera línea.
+              </p>
+            </div>
+
+            <h3 style={{fontSize:18,fontWeight:600,letterSpacing:'-.015em',margin:'40px 0 12px'}}>Ubicación · análisis de zona</h3>
+            <p style={{fontSize:13.5,color:'var(--ic-text-2)',margin:'0 0 14px',maxWidth:600}}>
+              Activá capas de IA para ver valor actual, proyección y oportunidades en la zona.
+            </p>
+            <MiniMap layers={layers} setLayers={setLayers}/>
+
+            <h3 style={{fontSize:18,fontWeight:600,letterSpacing:'-.015em',margin:'40px 0 12px'}}>
+              Propiedades similares
+              <AILabel> · recomendadas por IA</AILabel>
+            </h3>
+            <div className="similar-grid">
+              {PROPS.slice(1,5).map(p => <PropertyCard key={p.id} p={p}/>)}
+            </div>
+          </main>
+
+          <aside>
+            <div className="price-card">
+              <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10.5,marginBottom:6}}>PRECIO DE VENTA</div>
+              <div className="ic-num" style={{fontSize:36,fontWeight:600,letterSpacing:'-.03em',lineHeight:1}}>
+                USD 680.000
+              </div>
+              <div className="ic-num" style={{fontSize:13,color:'var(--ic-text-2)',marginTop:6}}>
+                USD 378/m² · ~8% bajo comparables
+              </div>
+
+              <div style={{height:1,background:'var(--ic-line)',margin:'22px 0'}}/>
+
+              <div style={{display:'flex',gap:8,marginBottom:14,flexDirection:'column'}}>
+                <button className="ic-btn ic-btn-primary" style={{width:'100%',justifyContent:'center',padding:14}}>
+                  Contactar al vendedor
+                </button>
+                <button className="ic-btn ic-btn-secondary" style={{width:'100%',justifyContent:'center'}}>
+                  Programar visita
+                </button>
+                <button className="ic-btn ic-btn-ghost" style={{width:'100%',justifyContent:'center'}}>
+                  ♡ Guardar
+                </button>
+              </div>
+
+              <div style={{padding:14,background:'var(--ic-gold-tint)',borderRadius:10,border:'1px solid rgba(201,168,76,.3)'}}>
+                <div className="ic-mono" style={{color:'#74540a',fontSize:10}}>INVERSIÓN FRACCIONADA</div>
+                <p style={{fontSize:13,margin:'8px 0 12px',lineHeight:1.5,color:'#3a2a07'}}>
+                  ¿No querés comprar todo? <b>Invertí desde USD 500</b> en este desarrollo y participá del retorno.
+                </p>
+                <a href="invest.html" className="ic-btn ic-btn-sm" style={{background:'#fff',color:'#3a2a07',width:'100%',justifyContent:'center'}}>
+                  Ver opción fraccionada →
+                </a>
+              </div>
+            </div>
+
+            <div className="seller-card">
+              <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10,marginBottom:14}}>PUBLICADO POR</div>
+              <div style={{display:'flex',gap:14,alignItems:'center',marginBottom:14}}>
+                <div className="ic-avatar" style={{width:52,height:52,fontSize:17}}>LS</div>
+                <div>
+                  <div style={{fontWeight:600,fontSize:15}}>Logística Sur SRL</div>
+                  <div style={{fontSize:12.5,color:'var(--ic-text-2)'}}>Inmobiliaria especializada</div>
+                </div>
+              </div>
+
+              <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
+                <VerifiedBadge/>
+                <VerifiedBadge premium/>
+                <VerifiedBadge ai/>
+              </div>
+
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,border:'1px solid var(--ic-line)',borderRadius:10,overflow:'hidden',marginBottom:14}}>
+                <div style={{padding:12,borderRight:'1px solid var(--ic-line)'}}>
+                  <div style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>CALIFICACIÓN</div>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginTop:6}}>
+                    <Stars value={4.9}/>
+                    <span className="ic-num" style={{fontWeight:600,fontSize:15}}>4.9</span>
+                  </div>
+                </div>
+                <div style={{padding:12}}>
+                  <div style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>OPERACIONES</div>
+                  <div style={{fontSize:15,fontWeight:600,marginTop:6}} className="ic-num">48 cerradas</div>
+                </div>
+                <div style={{padding:12,borderTop:'1px solid var(--ic-line)',borderRight:'1px solid var(--ic-line)'}}>
+                  <div style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>RESPUESTA</div>
+                  <div style={{fontSize:15,fontWeight:600,marginTop:6}}>~ 2 horas</div>
+                </div>
+                <div style={{padding:12,borderTop:'1px solid var(--ic-line)'}}>
+                  <div style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>EN PLATAFORMA</div>
+                  <div style={{fontSize:15,fontWeight:600,marginTop:6}}>2 años</div>
+                </div>
+              </div>
+
+              <div style={{marginBottom:8}}>
+                <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10,marginBottom:8}}>RESEÑAS RECIENTES</div>
+                {[
+                  { name:"R. Martínez", t:"3 sem.", r:5, txt:"Operación impecable. Documentación clara, respondieron rápido y sin vueltas." },
+                  { name:"Inv. del Sur", t:"2 meses", r:5, txt:"Cerramos un alquiler de nave en 3 semanas. Recomendados." },
+                ].map((r,i)=>(
+                  <div key={i} className="review">
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                      <span style={{fontSize:13,fontWeight:500}}>{r.name}</span>
+                      <Stars value={r.r}/>
+                    </div>
+                    <p style={{fontSize:13,color:'var(--ic-text)',margin:0,lineHeight:1.5}}>{r.txt}</p>
+                    <span style={{fontSize:11.5,color:'var(--ic-text-3)',fontFamily:'var(--ic-mono)',letterSpacing:'.1em'}}>{r.t} · verificada</span>
+                  </div>
+                ))}
+              </div>
+
+              <a href="#" style={{display:'inline-block',marginTop:12,fontSize:13,color:'var(--ic-burgundy)',fontWeight:500}}>Ver perfil completo →</a>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <Footer/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<PropertyPage/>);
+window.addEventListener('load', () => mountTweaks({ showLogoVar:true, showHeroVar:false }));
+</script>
+</body>
+</html>

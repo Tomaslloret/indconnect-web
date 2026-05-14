@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Mapa IA · INDCONNECT</title>
+<link rel="stylesheet" href="styles.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+<script>
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "burgundy": "#6B0F1A",
+    "goldOn": true,
+    "density": "regular",
+    "heroVar": "split",
+    "logoVar": 1,
+    "mapLegendVar": "panel"
+  }/*EDITMODE-END*/;
+</script>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<style>
+  html, body { height: 100%; }
+  body { background: #0F1014; }
+  .map-shell {
+    display: grid;
+    grid-template-columns: 280px 1fr 380px;
+    height: calc(100vh - 64px);
+  }
+  .map-canvas { position: relative; background:#1A1B21; }
+  #leaflet-map { position:absolute; inset:0; }
+
+  /* Override Leaflet defaults for darker look */
+  .leaflet-container { background: #0F1014; font-family: var(--ic-font); }
+  .leaflet-control-attribution { background: rgba(20,22,28,.7) !important; color: rgba(255,255,255,.5) !important; font-size: 9px !important; }
+  .leaflet-control-attribution a { color: rgba(255,255,255,.7) !important; }
+  .leaflet-control-zoom a {
+    background: rgba(20,22,28,.85) !important; color: #fff !important;
+    border-color: rgba(255,255,255,.15) !important;
+  }
+  .leaflet-control-zoom a:hover { background: rgba(40,41,48,.95) !important; }
+
+  /* Layer panel (left) */
+  .layer-panel {
+    background: #15161A; color: #fff;
+    border-right: 1px solid rgba(255,255,255,.08);
+    overflow-y: auto; padding: 24px 22px;
+  }
+  .layer-panel h3 { font-size:13px; font-weight:600; margin:0 0 4px; }
+  .layer-row {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.06);
+    cursor: default;
+  }
+  .layer-row:last-of-type { border-bottom: 0; }
+  .layer-swatch {
+    width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
+    margin-top: 2px;
+  }
+  .layer-info { flex: 1; }
+  .layer-info .name { font-size: 13.5px; font-weight: 500; }
+  .layer-info .desc { font-size: 11.5px; color: rgba(255,255,255,.5); margin-top: 3px; line-height:1.4; }
+  .layer-info .ai-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-top: 6px;
+    font-family: var(--ic-mono); font-size: 9.5px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ic-gold);
+  }
+  .layer-info .ai-tag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--ic-gold); }
+  .switch {
+    width: 32px; height: 18px; border-radius: 999px;
+    background: rgba(255,255,255,.12); position: relative; flex-shrink: 0;
+    transition: background .15s; margin-top: 6px;
+  }
+  .switch.on { background: var(--ic-burgundy-soft); }
+  .switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%; background: #fff;
+    transition: transform .15s;
+  }
+  .switch.on::after { transform: translateX(14px); }
+
+  /* Detail panel (right) */
+  .detail-panel {
+    background: var(--ic-card);
+    border-left: 1px solid var(--ic-line);
+    overflow-y: auto;
+  }
+
+  /* Floating map UI */
+  .map-ui-top {
+    position: absolute; top: 16px; left: 16px; right: 16px; z-index: 500;
+    display: flex; gap: 12px; align-items: center; pointer-events: none;
+  }
+  .map-ui-top > * { pointer-events: auto; }
+  .map-search {
+    flex: 1; max-width: 480px;
+    background: rgba(20,22,28,.85); backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 10px; padding: 6px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .map-search input {
+    flex: 1; background: transparent; border: 0; outline: 0;
+    padding: 8px 10px; color: #fff; font: inherit; font-size: 13.5px;
+  }
+  .map-search input::placeholder { color: rgba(255,255,255,.4); }
+
+  /* Legend */
+  .legend {
+    position: absolute; bottom: 16px; left: 16px; z-index: 500;
+    background: rgba(20,22,28,.85); backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 10px; padding: 14px 16px;
+    color: #fff; max-width: 280px;
+  }
+  .legend h5 { margin:0 0 10px; font-size: 11px; font-family: var(--ic-mono); letter-spacing:.14em; text-transform: uppercase; color: rgba(255,255,255,.6); font-weight: 500; }
+  .legend-grad { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+  .legend-labels { display: flex; justify-content: space-between; font-size: 11px; color: rgba(255,255,255,.7); font-family: var(--ic-mono); }
+
+  /* Zone marker (pulsing for AI) */
+  .ai-marker {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ic-gold);
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 4px rgba(201,168,76,.25), 0 4px 12px rgba(0,0,0,.4);
+    animation: pulse-gold 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse-gold {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(201,168,76,.25), 0 4px 12px rgba(0,0,0,.4); }
+    50% { box-shadow: 0 0 0 14px rgba(201,168,76,.05), 0 4px 12px rgba(0,0,0,.4); }
+  }
+  .prop-marker {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ic-burgundy);
+    border: 3px solid #fff;
+    box-shadow: 0 4px 10px rgba(0,0,0,.35);
+  }
+  .prop-marker.gold { background: var(--ic-gold); }
+
+  /* Mini chart */
+  .mini-bar {
+    display: flex; align-items: flex-end; gap: 4px; height: 60px;
+  }
+  .mini-bar > div { flex: 1; background: var(--ic-burgundy); border-radius: 2px 2px 0 0; opacity: .85; }
+  .mini-bar > div.peak { background: var(--ic-gold); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--ic-line); }
+  .tabs button {
+    flex: 1; padding: 14px 0; background: transparent; border: 0;
+    font-size: 13px; font-weight: 500; color: var(--ic-text-2);
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+  }
+  .tabs button.active { color: var(--ic-burgundy); border-bottom-color: var(--ic-burgundy); }
+
+  /* AI insight pill */
+  .ai-insight {
+    background: linear-gradient(180deg, #15161A 0%, #1C1D23 100%);
+    color: #fff; border-radius: 12px;
+    padding: 14px 16px; margin: 16px 24px;
+    position: relative; overflow: hidden;
+    border: 1px solid rgba(201,168,76,.18);
+  }
+  .ai-insight::before {
+    content: ""; position: absolute; top: -50px; right: -50px;
+    width: 150px; height: 150px;
+    background: radial-gradient(closest-side, rgba(201,168,76,.18), transparent 70%);
+  }
+
+  /* Custom marker via div */
+  .ic-div-marker {
+    background: transparent !important;
+    border: 0 !important;
+  }
+  .leaflet-popup-content-wrapper {
+    background: var(--ic-ink) !important; color: #fff !important;
+    border-radius: 10px !important;
+    box-shadow: 0 16px 32px rgba(0,0,0,.4) !important;
+    padding: 0 !important;
+  }
+  .leaflet-popup-content { margin: 12px 14px !important; font-family: var(--ic-font) !important; }
+  .leaflet-popup-tip { background: var(--ic-ink) !important; }
+  .leaflet-popup-close-button { color: rgba(255,255,255,.5) !important; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="tweaks.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useRef } = React;
+
+/* ─── Real Bahía Blanca industrial zones with rough polygon outlines ─── */
+const MAP_ZONES = [
+  {
+    id: "white", name: "Puerto Ing. White",
+    subtitle: "Logística portuaria · Petroquímico",
+    avgPrice: 480, change6m: +4.2, demand: 92, proj12m: +6.8, proj36m: +22.4,
+    specialty: "Logística", aiOpp: true,
+    center: [-38.7785, -62.2680],
+    polygon: [[-38.766,-62.290],[-38.762,-62.255],[-38.790,-62.245],[-38.795,-62.282]],
+    pricePerM2Trend: [420, 432, 445, 458, 465, 472, 480],
+    activeProps: 38,
+  },
+  {
+    id: "polo", name: "Polo Petroquímico",
+    subtitle: "Industria pesada · Química",
+    avgPrice: 540, change6m: +5.6, demand: 88, proj12m: +7.4, proj36m: +25.1,
+    specialty: "Petroquímica", aiOpp: false,
+    center: [-38.7920, -62.2480],
+    polygon: [[-38.780,-62.260],[-38.778,-62.230],[-38.805,-62.225],[-38.808,-62.255]],
+    pricePerM2Trend: [462, 478, 495, 510, 522, 532, 540],
+    activeProps: 12,
+  },
+  {
+    id: "parque", name: "Parque Industrial",
+    subtitle: "Manufactura · Almacenamiento",
+    avgPrice: 320, change6m: +2.1, demand: 78, proj12m: +4.5, proj36m: +15.2,
+    specialty: "Manufactura", aiOpp: true,
+    center: [-38.6920, -62.2580],
+    polygon: [[-38.682,-62.270],[-38.680,-62.245],[-38.702,-62.242],[-38.705,-62.268]],
+    pricePerM2Trend: [298, 304, 310, 313, 316, 318, 320],
+    activeProps: 64,
+  },
+  {
+    id: "carrin", name: "La Carrindanga",
+    subtitle: "Logística regional · Ruta 3",
+    avgPrice: 260, change6m: +3.1, demand: 81, proj12m: +5.6, proj36m: +18.6,
+    specialty: "Logística", aiOpp: true,
+    center: [-38.7020, -62.3120],
+    polygon: [[-38.692,-62.325],[-38.690,-62.295],[-38.712,-62.295],[-38.715,-62.325]],
+    pricePerM2Trend: [232, 240, 246, 250, 254, 258, 260],
+    activeProps: 29,
+  },
+  {
+    id: "cerri", name: "General Cerri",
+    subtitle: "Alimentaria · Frigorífico",
+    avgPrice: 210, change6m: +1.4, demand: 64, proj12m: +3.2, proj36m: +10.8,
+    specialty: "Alimentaria", aiOpp: false,
+    center: [-38.7480, -62.4030],
+    polygon: [[-38.738,-62.418],[-38.738,-62.388],[-38.758,-62.388],[-38.760,-62.418]],
+    pricePerM2Trend: [198, 202, 204, 207, 208, 209, 210],
+    activeProps: 14,
+  },
+];
+
+/* Property pins on map */
+const MAP_PROPS = [
+  { id:"p1", coord:[-38.7770,-62.2640], gold:true,  type:"Galpón 1.800 m²", zone:"Puerto Ing. White", price:"USD 680.000" },
+  { id:"p2", coord:[-38.6905,-62.2560], gold:false, type:"Nave 3.200 m²",   zone:"Parque Industrial",  price:"USD 1.450.000" },
+  { id:"p3", coord:[-38.7020,-62.3080], gold:true,  type:"Terreno 8.500 m²",zone:"La Carrindanga",     price:"USD 320.000 · Subvaluado" },
+  { id:"p4", coord:[-38.7800,-62.2700], gold:false, type:"Centro Log. 5.400 m²", zone:"Puerto Ing. White", price:"USD 2.100.000" },
+  { id:"p5", coord:[-38.6940,-62.2535], gold:false, type:"Galpón 920 m²",   zone:"Parque Industrial",   price:"USD 4.800/mes · ALQUILER" },
+  { id:"p6", coord:[-38.6960,-62.2545], gold:true,  type:"Proyecto en pozo",zone:"Parque Industrial",   price:"Desde USD 500" },
+  { id:"p7", coord:[-38.7900,-62.2470], gold:false, type:"Nave petroquímica",zone:"Polo Petroquímico",  price:"USD 1.890.000" },
+  { id:"p8", coord:[-38.7475,-62.4010], gold:false, type:"Nave alimentaria 2.100 m²",zone:"General Cerri", price:"USD 720.000" },
+];
+
+const LAYERS = [
+  { id:"value",  name:"Valor actual",         desc:"Precio promedio USD/m² por zona en tiempo real.", ai:false, color:"#6B0F1A" },
+  { id:"future", name:"Valor futuro",         desc:"Proyección de revalorización por obras públicas, demanda y habilitaciones.", ai:true,  color:"#C9A84C" },
+  { id:"spec",   name:"Especialización",      desc:"Industria predominante por zona: logística, manufactura, alimentaria, etc.", ai:true,  color:"#2E7D5B" },
+  { id:"ai",     name:"Oportunidades IA",     desc:"Propiedades y terrenos detectados como subvaluados o con alto potencial.", ai:true,  color:"#C9A84C" },
+  { id:"props",  name:"Propiedades disponibles", desc:"Pines clickeables con publicaciones activas.", ai:false, color:"#6B0F1A" },
+];
+
+const SPEC_COLORS = {
+  "Logística":     "#6B0F1A",
+  "Petroquímica":  "#4A0A12",
+  "Manufactura":   "#C9A84C",
+  "Alimentaria":   "#2E7D5B",
+};
+
+function gradColor(v) {
+  // value-based gradient for layer 1: 0=210, 1=540
+  const t = (v - 200) / 360;
+  // burgundy soft -> burgundy deep
+  const a = { r:0xF7, g:0xEB, b:0xED };
+  const b = { r:0x6B, g:0x0F, b:0x1A };
+  const r = Math.round(a.r + (b.r-a.r)*t);
+  const g = Math.round(a.g + (b.g-a.g)*t);
+  const bl= Math.round(a.b + (b.b-a.b)*t);
+  return `rgb(${r},${g},${bl})`;
+}
+function futureColor(v) {
+  // 0..30 → soft gold to deep gold
+  const t = Math.min(1, v / 30);
+  const a = { r:0xFA, g:0xF4, b:0xE1 };
+  const b = { r:0xC9, g:0xA8, b:0x4C };
+  const r = Math.round(a.r + (b.r-a.r)*t);
+  const g = Math.round(a.g + (b.g-a.g)*t);
+  const bl= Math.round(a.b + (b.b-a.b)*t);
+  return `rgb(${r},${g},${bl})`;
+}
+
+/* ─── Layer panel (left) ─── */
+function LayerPanel({ enabled, setEnabled }) {
+  return (
+    <div className="layer-panel">
+      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:18}}>
+        <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-gold)',boxShadow:'0 0 0 3px rgba(201,168,76,.25)'}}/>
+        <span className="ic-mono" style={{color:'rgba(255,255,255,.55)',fontSize:10.5}}>MAPA IA · BAHÍA BLANCA</span>
+      </div>
+      <h2 style={{fontSize:20,fontWeight:600,letterSpacing:'-.02em',marginBottom:6}}>Capas de análisis</h2>
+      <p style={{fontSize:12.5,color:'rgba(255,255,255,.55)',lineHeight:1.5,marginBottom:18,marginTop:0}}>
+        Activá capas para superponer datos del mercado y predicciones del modelo.
+      </p>
+      {LAYERS.map((L,i) => (
+        <div key={L.id} className="layer-row" onClick={()=>setEnabled({...enabled, [L.id]: !enabled[L.id]})}>
+          <div className="layer-swatch">
+            {L.id === "value" && <svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="2" width="16" height="16" rx="2" fill={L.color} opacity=".4"/><rect x="2" y="2" width="16" height="16" rx="2" fill="none" stroke={L.color}/></svg>}
+            {L.id === "future" && <svg width="20" height="20" viewBox="0 0 20 20"><path d="M3 14L7 10L11 12L17 5" stroke={L.color} strokeWidth="1.8" fill="none"/><circle cx="17" cy="5" r="2" fill={L.color}/></svg>}
+            {L.id === "spec" && <svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="2" width="7" height="7" fill={L.color}/><rect x="11" y="2" width="7" height="7" fill="#C9A84C" opacity=".7"/><rect x="2" y="11" width="7" height="7" fill="#2E7D5B" opacity=".7"/><rect x="11" y="11" width="7" height="7" fill="#4A0A12" opacity=".7"/></svg>}
+            {L.id === "ai" && <svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 2L11.5 7L16 7.5L12.5 10.5L14 16L10 13L6 16L7.5 10.5L4 7.5L8.5 7L10 2Z" fill={L.color}/></svg>}
+            {L.id === "props" && <svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="8" r="4" fill={L.color}/><path d="M10 12L10 18M7 18H13" stroke={L.color} strokeWidth="1.5"/></svg>}
+          </div>
+          <div className="layer-info">
+            <div className="name">{L.name}</div>
+            <div className="desc">{L.desc}</div>
+            {L.ai && <div className="ai-tag">Powered by IA</div>}
+          </div>
+          <div className={"switch " + (enabled[L.id] ? "on" : "")}/>
+        </div>
+      ))}
+
+      <div style={{marginTop:22,padding:14,border:'1px solid rgba(201,168,76,.18)',borderRadius:10,background:'rgba(201,168,76,.04)'}}>
+        <div className="ic-mono" style={{color:'var(--ic-gold)',fontSize:10}}>SUGERENCIA IA</div>
+        <p style={{fontSize:12.5,color:'rgba(255,255,255,.78)',lineHeight:1.5,margin:'8px 0 0'}}>
+          Combiná <b>Valor futuro</b> + <b>Oportunidades IA</b> para ver las zonas con mayor upside.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Detail panel (right) ─── */
+function DetailPanel({ zone }) {
+  const [tab, setTab] = useState("resumen");
+  if (!zone) {
+    return (
+      <div className="detail-panel">
+        <div style={{padding:'48px 32px',textAlign:'center'}}>
+          <div style={{width:48,height:48,borderRadius:12,background:'var(--ic-burgundy-tint)',color:'var(--ic-burgundy)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 22S4 14 4 9a8 8 0 1 1 16 0c0 5-8 13-8 13Z" stroke="currentColor" strokeWidth="1.7"/><circle cx="12" cy="9" r="3" stroke="currentColor" strokeWidth="1.7"/></svg>
+          </div>
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:6}}>Seleccioná una zona</h3>
+          <p style={{fontSize:13,color:'var(--ic-text-2)',lineHeight:1.5,margin:0,maxWidth:240,marginInline:'auto'}}>
+            Clickeá un sector del mapa para ver el análisis de IA, precios y proyección.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const trend = zone.pricePerM2Trend;
+  const peakIdx = trend.indexOf(Math.max(...trend));
+
+  return (
+    <div className="detail-panel">
+      <div style={{padding:'24px 24px 20px',borderBottom:'1px solid var(--ic-line)'}}>
+        <span className="ic-pagetag" style={{marginBottom:14}}>Zona seleccionada</span>
+        <h2 style={{fontSize:24,fontWeight:600,letterSpacing:'-.025em',margin:'12px 0 4px'}}>{zone.name}</h2>
+        <div style={{fontSize:13,color:'var(--ic-text-2)'}}>{zone.subtitle}</div>
+        <div style={{display:'flex',gap:8,marginTop:14}}>
+          <span className="ic-badge" style={{background:SPEC_COLORS[zone.specialty]+'18',borderColor:SPEC_COLORS[zone.specialty]+'40',color:SPEC_COLORS[zone.specialty]}}>
+            {zone.specialty}
+          </span>
+          {zone.aiOpp && <span className="ic-badge ic-badge-ai"><span className="dot"/>Oportunidad IA</span>}
+        </div>
+      </div>
+
+      <div className="tabs">
+        {["resumen","propiedades","invertir"].map(t=>(
+          <button key={t} className={tab===t?"active":""} onClick={()=>setTab(t)}>
+            {t === "resumen" ? "Resumen" : t === "propiedades" ? "Propiedades" : "Invertir"}
+          </button>
+        ))}
+      </div>
+
+      {tab==="resumen" && <>
+        <div className="ai-insight">
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+            <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-gold)',boxShadow:'0 0 0 3px rgba(201,168,76,.22)'}}/>
+            <span className="ic-mono" style={{color:'var(--ic-gold)',fontSize:10}}>ANÁLISIS IA</span>
+          </div>
+          <p style={{fontSize:13,lineHeight:1.55,margin:0,position:'relative'}}>
+            Esta zona muestra <b>demanda creciente</b> ({zone.demand}/100) impulsada por movimiento portuario y nuevas habilitaciones. Proyección de valor: <b style={{color:'var(--ic-gold)'}}>+{zone.proj36m.toFixed(1)}% en 36 meses</b>.
+          </p>
+        </div>
+
+        <div style={{padding:'0 24px'}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,borderTop:'1px solid var(--ic-line)',borderLeft:'1px solid var(--ic-line)'}}>
+            <Stat k="Precio USD/m²" v={"$" + zone.avgPrice}/>
+            <Stat k="Δ 6 meses" v={(zone.change6m>0?'+':'')+zone.change6m.toFixed(1)+'%'} pos={zone.change6m>0}/>
+            <Stat k="Demanda" v={zone.demand + "/100"}/>
+            <Stat k="Activas" v={zone.activeProps}/>
+            <Stat k="Proy. 12m" v={'+'+zone.proj12m.toFixed(1)+'%'} accent/>
+            <Stat k="Proy. 36m" v={'+'+zone.proj36m.toFixed(1)+'%'} accent/>
+          </div>
+        </div>
+
+        <div style={{padding:'24px'}}>
+          <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10,marginBottom:10}}>USD/M² · ÚLTIMOS 7 MESES</div>
+          <div className="mini-bar">
+            {trend.map((v,i)=>(
+              <div key={i} className={i===peakIdx?"peak":""} style={{height: (v/Math.max(...trend))*100+'%'}} title={'$'+v}/>
+            ))}
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:8,fontSize:10.5,color:'var(--ic-text-3)',fontFamily:'var(--ic-mono)'}}>
+            <span>NOV</span><span>DIC</span><span>ENE</span><span>FEB</span><span>MAR</span><span>ABR</span><span>MAY</span>
+          </div>
+        </div>
+
+        <div style={{padding:'0 24px 24px'}}>
+          <a href="invest.html" className="ic-btn ic-btn-primary" style={{width:'100%',justifyContent:'center',padding:'14px'}}>
+            Invertir en esta zona →
+          </a>
+          <a href="search.html" className="ic-btn ic-btn-ghost" style={{width:'100%',justifyContent:'center',marginTop:8}}>
+            Ver propiedades en {zone.name}
+          </a>
+        </div>
+      </>}
+
+      {tab==="propiedades" && <div style={{padding:'20px 24px'}}>
+        {MAP_PROPS.filter(p => p.zone === zone.name).map(p => (
+          <a key={p.id} href="property.html" style={{display:'block',padding:'14px',borderRadius:10,border:'1px solid var(--ic-line)',marginBottom:8,textDecoration:'none',color:'inherit'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12}}>
+              <div>
+                <div style={{fontSize:14,fontWeight:600,marginBottom:2}}>{p.type}</div>
+                <div style={{fontSize:12,color:'var(--ic-text-2)'}}>{p.zone}</div>
+              </div>
+              {p.gold && <span className="ic-badge ic-badge-ai" style={{fontSize:9.5}}><span className="dot"/>IA</span>}
+            </div>
+            <div style={{fontSize:13,fontWeight:500,marginTop:8}} className="ic-num">{p.price}</div>
+          </a>
+        ))}
+        {MAP_PROPS.filter(p => p.zone === zone.name).length === 0 &&
+          <p style={{fontSize:13,color:'var(--ic-text-2)'}}>Aún no hay propiedades publicadas en esta zona.</p>}
+      </div>}
+
+      {tab==="invertir" && <div style={{padding:'24px'}}>
+        <h4 style={{fontSize:14,fontWeight:600,marginBottom:6}}>Proyectos fraccionados en {zone.name}</h4>
+        <p style={{fontSize:12.5,color:'var(--ic-text-2)',margin:'0 0 16px',lineHeight:1.5}}>
+          Co-invertí en desarrollos industriales de esta zona desde USD 500.
+        </p>
+        {INVEST_PROJECTS.slice(0,2).map(p=>(
+          <a key={p.id} href="invest.html" style={{display:'block',marginBottom:12,padding:14,borderRadius:10,border:'1px solid var(--ic-line)',background:'var(--ic-bg)',textDecoration:'none',color:'inherit'}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8,marginBottom:6}}>
+              <div style={{fontSize:14,fontWeight:600}}>{p.name}</div>
+              <span style={{fontSize:11,fontFamily:'var(--ic-mono)',color:'var(--ic-gold)'}}>{p.roi}% ROI</span>
+            </div>
+            <div style={{height:4,background:'var(--ic-line)',borderRadius:2,marginBottom:8,overflow:'hidden'}}>
+              <div style={{width:p.funded+'%',height:'100%',background:'var(--ic-burgundy)'}}/>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:11.5,color:'var(--ic-text-2)'}}>
+              <span>Desde USD {p.min}</span><span>{p.funded}% financiado</span>
+            </div>
+          </a>
+        ))}
+      </div>}
+    </div>
+  );
+}
+
+function Stat({ k, v, pos, accent }) {
+  return (
+    <div style={{padding:'14px 16px',borderRight:'1px solid var(--ic-line)',borderBottom:'1px solid var(--ic-line)'}}>
+      <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10}}>{k}</div>
+      <div className="ic-num" style={{fontSize:18,fontWeight:600,letterSpacing:'-.02em',marginTop:4,
+        color: accent ? 'var(--ic-gold)' : pos ? 'var(--ic-success)' : 'var(--ic-ink)'}}>{v}</div>
+    </div>
+  );
+}
+
+/* ─── Map ─── */
+function LeafletMap({ enabled, selectedZone, onZoneSelect }) {
+  const mapRef = useRef(null);
+  const containerRef = useRef(null);
+  const layerRefs = useRef({});
+
+  useEffect(() => {
+    if (mapRef.current) return;
+    const map = L.map(containerRef.current, {
+      center: [-38.735, -62.290],
+      zoom: 12,
+      zoomControl: true,
+      attributionControl: true,
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap, © CARTO',
+    }).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19, pane: 'shadowPane'
+    }).addTo(map);
+    mapRef.current = map;
+  }, []);
+
+  // re-render zone polygons
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    Object.values(layerRefs.current).forEach(layer => { if (layer) map.removeLayer(layer); });
+    layerRefs.current = {};
+
+    // Layer 1: Valor actual
+    if (enabled.value) {
+      const grp = L.layerGroup();
+      MAP_ZONES.forEach(z => {
+        const poly = L.polygon(z.polygon, {
+          color: gradColor(z.avgPrice), weight: 1, opacity: .8,
+          fillColor: gradColor(z.avgPrice), fillOpacity: .55,
+        }).bindTooltip(`<b>${z.name}</b><br/>USD ${z.avgPrice}/m²`, {className:'leaflet-tooltip-ic'});
+        poly.on('click', () => onZoneSelect(z));
+        grp.addLayer(poly);
+      });
+      grp.addTo(map);
+      layerRefs.current.value = grp;
+    }
+    // Layer 2: Valor futuro
+    if (enabled.future) {
+      const grp = L.layerGroup();
+      MAP_ZONES.forEach(z => {
+        const poly = L.polygon(z.polygon, {
+          color: futureColor(z.proj36m), weight: 2, opacity: .9,
+          fillColor: futureColor(z.proj36m), fillOpacity: .35,
+          dashArray: '4,4',
+        }).bindTooltip(`<b>${z.name}</b><br/>+${z.proj36m.toFixed(1)}% (36m)`);
+        poly.on('click', () => onZoneSelect(z));
+        grp.addLayer(poly);
+      });
+      grp.addTo(map);
+      layerRefs.current.future = grp;
+    }
+    // Layer 3: Especialización
+    if (enabled.spec) {
+      const grp = L.layerGroup();
+      MAP_ZONES.forEach(z => {
+        const c = SPEC_COLORS[z.specialty];
+        const poly = L.polygon(z.polygon, {
+          color: c, weight: 1.5, opacity: .9,
+          fillColor: c, fillOpacity: .25,
+        }).bindTooltip(`<b>${z.name}</b><br/>${z.specialty}`);
+        poly.on('click', () => onZoneSelect(z));
+        grp.addLayer(poly);
+      });
+      grp.addTo(map);
+      layerRefs.current.spec = grp;
+    }
+    // Layer 4: AI opportunities — animated markers
+    if (enabled.ai) {
+      const grp = L.layerGroup();
+      MAP_ZONES.filter(z => z.aiOpp).forEach(z => {
+        const icon = L.divIcon({
+          html: '<div class="ai-marker"></div>',
+          className: 'ic-div-marker',
+          iconSize: [28,28], iconAnchor: [14,14],
+        });
+        const m = L.marker(z.center, { icon }).bindPopup(`
+          <div style="font-size:11px;font-family:'Geist Mono';color:#C9A84C;letter-spacing:.14em;text-transform:uppercase;">Oportunidad IA</div>
+          <b style="display:block;margin:6px 0 2px;font-size:15px;">${z.name}</b>
+          <div style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px">${z.subtitle}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.85);">Subvaluada vs comparables · Proyección +${z.proj36m.toFixed(1)}% a 36m</div>
+        `);
+        m.on('click', () => onZoneSelect(z));
+        grp.addLayer(m);
+      });
+      grp.addTo(map);
+      layerRefs.current.ai = grp;
+    }
+    // Layer 5: Property pins
+    if (enabled.props) {
+      const grp = L.layerGroup();
+      MAP_PROPS.forEach(p => {
+        const icon = L.divIcon({
+          html: `<div class="prop-marker ${p.gold?'gold':''}"></div>`,
+          className: 'ic-div-marker',
+          iconSize: [22,22], iconAnchor: [11,11],
+        });
+        L.marker(p.coord, { icon }).addTo(grp).bindPopup(`
+          <b style="font-size:14px;">${p.type}</b>
+          <div style="font-size:12px;color:rgba(255,255,255,.6);margin:2px 0 8px;">${p.zone}</div>
+          <div style="font-size:13px;font-weight:600;">${p.price}</div>
+          <a href="property.html" style="color:#C9A84C;font-size:12px;display:block;margin-top:8px;">Ver detalle →</a>
+        `);
+      });
+      grp.addTo(map);
+      layerRefs.current.props = grp;
+    }
+  }, [enabled]);
+
+  return <div ref={containerRef} id="leaflet-map"/>;
+}
+
+/* ─── Main App ─── */
+function MapPage() {
+  const [t] = useIndTweaks();
+  const [enabled, setEnabled] = useState({
+    value: true, future: false, spec: false, ai: true, props: true,
+  });
+  const [selectedZone, setSelectedZone] = useState(MAP_ZONES[0]);
+
+  return (
+    <div className="ic-page" data-screen-label="02 Mapa IA">
+      <Header active="map" logoVariant={t.logoVar}/>
+      <div className="map-shell">
+        <LayerPanel enabled={enabled} setEnabled={setEnabled}/>
+        <div className="map-canvas">
+          <LeafletMap enabled={enabled} selectedZone={selectedZone} onZoneSelect={setSelectedZone}/>
+          <div className="map-ui-top">
+            <div className="map-search">
+              <div style={{width:32,height:32,borderRadius:6,background:'linear-gradient(135deg,var(--ic-burgundy),#1C1D23)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor"/></svg>
+              </div>
+              <input placeholder="Preguntale a la IA: 'Zonas con upside cerca del puerto'"/>
+              <button className="ic-btn ic-btn-sm" style={{background:'var(--ic-burgundy)',color:'#fff'}}>Buscar</button>
+            </div>
+            <div style={{display:'flex',gap:8,marginLeft:'auto'}}>
+              <button className="ic-btn ic-btn-sm" style={{background:'rgba(20,22,28,.85)',color:'#fff',border:'1px solid rgba(255,255,255,.12)'}}>Bahía Blanca ▾</button>
+              <button className="ic-btn ic-btn-sm" style={{background:'rgba(20,22,28,.85)',color:'#fff',border:'1px solid rgba(255,255,255,.12)'}}>Compartir</button>
+            </div>
+          </div>
+
+          {enabled.value && (
+            <div className="legend">
+              <h5>USD/m² · Valor actual</h5>
+              <div className="legend-grad" style={{background:'linear-gradient(90deg, #F7EBED, #6B0F1A)'}}/>
+              <div className="legend-labels"><span>$200</span><span>$400</span><span>$540+</span></div>
+            </div>
+          )}
+          {enabled.future && !enabled.value && (
+            <div className="legend">
+              <h5>Proyección 36m</h5>
+              <div className="legend-grad" style={{background:'linear-gradient(90deg, #FAF4E1, #C9A84C)'}}/>
+              <div className="legend-labels"><span>+5%</span><span>+15%</span><span>+25%+</span></div>
+            </div>
+          )}
+        </div>
+        <DetailPanel zone={selectedZone}/>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<MapPage/>);
+window.addEventListener('load', () => mountTweaks({ showLogoVar:true, showHeroVar:false }));
+</script>
+</body>
+</html>

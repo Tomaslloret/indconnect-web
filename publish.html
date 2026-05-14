@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Publicar propiedad · INDCONNECT</title>
+<link rel="stylesheet" href="styles.css"/>
+
+<script>
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "burgundy": "#6B0F1A",
+    "goldOn": true,
+    "density": "regular",
+    "heroVar": "split",
+    "logoVar": 1
+  }/*EDITMODE-END*/;
+</script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<style>
+  .pub-shell {
+    display: grid; grid-template-columns: 280px 1fr 360px;
+    gap: 0; min-height: calc(100vh - 64px);
+  }
+  @media (max-width: 1100px) {
+    .pub-shell { grid-template-columns: 1fr; }
+    .pub-side, .pub-preview { display: none; }
+  }
+  .pub-side {
+    background: #fff; border-right: 1px solid var(--ic-line);
+    padding: 40px 28px;
+  }
+  .step {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 14px 0; cursor: default;
+    position: relative;
+  }
+  .step + .step::before {
+    content: ""; position: absolute;
+    top: -14px; left: 13px; width: 2px; height: 28px;
+    background: var(--ic-line);
+  }
+  .step.done + .step::before { background: var(--ic-burgundy); }
+  .step .dot {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    background: #fff; border: 2px solid var(--ic-line);
+    color: var(--ic-text-2);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--ic-mono); font-size: 11px; font-weight: 600;
+  }
+  .step.active .dot { background: var(--ic-burgundy); border-color: var(--ic-burgundy); color: #fff; }
+  .step.done .dot { background: var(--ic-burgundy); border-color: var(--ic-burgundy); color: #fff; }
+  .step .body { flex: 1; padding-top: 4px; }
+  .step .body .t { font-size: 13.5px; font-weight: 500; color: var(--ic-text); }
+  .step.active .body .t { color: var(--ic-burgundy); font-weight: 600; }
+  .step .body .s { font-size: 11.5px; color: var(--ic-text-3); margin-top: 2px; }
+
+  .pub-main { padding: 48px 56px 96px; background: var(--ic-bg); }
+  @media (max-width: 720px) { .pub-main { padding: 24px 20px; } }
+
+  .form-card {
+    background: #fff; border: 1px solid var(--ic-line); border-radius: 14px;
+    padding: 36px;
+  }
+  .field { margin-bottom: 22px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px; }
+  .field-row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 22px; }
+
+  .type-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  @media (max-width: 720px) { .type-grid { grid-template-columns: repeat(2, 1fr); } }
+  .type-card {
+    aspect-ratio: 1.2/1; border: 1px solid var(--ic-line); border-radius: 10px;
+    padding: 14px 12px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    color: var(--ic-text); cursor: default;
+    transition: all .12s;
+  }
+  .type-card:hover { border-color: #c5c7d0; }
+  .type-card.on { background: var(--ic-burgundy-tint); border-color: var(--ic-burgundy); color: var(--ic-burgundy); }
+  .type-card .icon { width: 28px; height: 28px; border-radius: 6px; background: var(--ic-bg-2); display:flex;align-items:center;justify-content:center; }
+  .type-card.on .icon { background: rgba(107,15,26,.15); color: var(--ic-burgundy); }
+  .type-card .name { font-size: 13px; font-weight: 500; }
+
+  .mode-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .mode-pill {
+    padding: 12px 16px; border-radius: 10px;
+    border: 1px solid var(--ic-line); background: #fff;
+    font-size: 13.5px; font-weight: 500; color: var(--ic-text);
+    display: flex; gap: 8px; align-items: center;
+  }
+  .mode-pill.on { background: var(--ic-burgundy); border-color: var(--ic-burgundy); color: #fff; }
+  .mode-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ic-line); }
+  .mode-pill.on .dot { background: #fff; }
+
+  .map-pick {
+    height: 280px; border-radius: 12px; overflow: hidden;
+    position: relative; background: #1A1B21;
+  }
+  .map-pick svg { position:absolute;inset:0;width:100%;height:100%; }
+  .map-pick .pin-drop {
+    position:absolute; top:50%; left:50%; transform: translate(-50%,-100%);
+    z-index:3; pointer-events:none;
+  }
+  .map-pick .pin-drop .head {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ic-burgundy); border: 3px solid #fff;
+    box-shadow: 0 6px 14px rgba(0,0,0,.4);
+  }
+
+  .upload {
+    border: 1.5px dashed var(--ic-line);
+    border-radius: 12px; padding: 32px 24px;
+    text-align: center; background: var(--ic-bg-2);
+  }
+  .upload .icon-big {
+    width: 48px; height: 48px; border-radius: 10px;
+    background: var(--ic-burgundy-tint); color: var(--ic-burgundy);
+    margin: 0 auto 12px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .photos-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    margin-top: 14px;
+  }
+  .photos-grid .photo-mini {
+    aspect-ratio: 1/1; border-radius: 8px;
+    background: repeating-linear-gradient(135deg, #E9EAEE 0 10px, #DFE0E5 10px 20px);
+    position: relative;
+  }
+  .photos-grid .photo-mini.add {
+    background: var(--ic-bg-2); border: 1.5px dashed var(--ic-line);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ic-text-2); font-size: 20px;
+  }
+
+  .pub-preview {
+    background: var(--ic-bg-2); border-left: 1px solid var(--ic-line);
+    padding: 32px 28px;
+    position: sticky; top: 64px; align-self: flex-start;
+    height: calc(100vh - 64px); overflow-y: auto;
+  }
+
+  .verif-card {
+    background: #fff; border: 1px solid rgba(201,168,76,.4);
+    border-radius: 12px; padding: 18px 20px;
+    margin-top: 20px;
+    background: linear-gradient(180deg, #fff 0%, var(--ic-gold-tint) 100%);
+  }
+
+  .toggle-cb {
+    display: flex; gap: 10px; align-items: center;
+    font-size: 14px; padding: 10px 0;
+  }
+  .toggle-cb .swc {
+    width: 32px; height: 18px; border-radius: 999px; background: var(--ic-line);
+    position: relative; transition: background .12s;
+  }
+  .toggle-cb .swc::after {
+    content: ""; position:absolute; top:2px; left:2px;
+    width: 14px; height: 14px; border-radius: 50%; background: #fff;
+    transition: transform .12s;
+  }
+  .toggle-cb.on .swc { background: var(--ic-burgundy); }
+  .toggle-cb.on .swc::after { transform: translateX(14px); }
+
+  .section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .section-head .num {
+    font-family: var(--ic-mono); font-size: 10px; letter-spacing: .14em;
+    color: var(--ic-text-3); padding: 3px 6px;
+    border: 1px solid var(--ic-line); border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="tweaks.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { useState } = React;
+
+const STEPS = [
+  { id:1, t:"Tipo y modalidad",     s:"Categoría · venta/alquiler/pozo" },
+  { id:2, t:"Ubicación",            s:"Mapa interactivo · zona" },
+  { id:3, t:"Detalles técnicos",    s:"Superficie · altura · accesos" },
+  { id:4, t:"Precio",               s:"Monto · condiciones" },
+  { id:5, t:"Descripción y fotos",  s:"Texto + galería + planos" },
+  { id:6, t:"Contacto y verif.",    s:"Identidad · badge verificado" },
+];
+
+const TYPES = [
+  { id:"galp",  name:"Galpón",            icon:"M3 21V8L9 4L15 8V21" },
+  { id:"nave",  name:"Nave Industrial",   icon:"M3 21H21V12L12 5L3 12V21M9 21V14H15V21" },
+  { id:"terr",  name:"Terreno",           icon:"M4 18L9 12L13 15L20 8" },
+  { id:"cl",    name:"Centro Logístico",  icon:"M3 21V11M21 21V11M3 11L12 4L21 11M7 21V15H17V21" },
+  { id:"loc",   name:"Local",             icon:"M5 21V8L12 4L19 8V21M9 21V14H15V21" },
+];
+
+function PublishPage() {
+  const [t] = useIndTweaks();
+  const [type, setType] = useState('galp');
+  const [mode, setMode] = useState('venta');
+  const [verified, setVerified] = useState(false);
+
+  return (
+    <div className="ic-page" data-screen-label="07 Publicar">
+      <Header active="publish" logoVariant={t.logoVar}/>
+
+      <div className="pub-shell">
+        {/* Steps */}
+        <aside className="pub-side">
+          <div className="ic-eyebrow" style={{marginBottom:18}}>Pasos</div>
+          {STEPS.map((s,i) => (
+            <div key={s.id} className={"step " + (i < 1 ? "done" : i === 1 ? "active" : "")}>
+              <div className="dot">{i < 1 ? <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" fill="none"/></svg> : s.id}</div>
+              <div className="body">
+                <div className="t">{s.t}</div>
+                <div className="s">{s.s}</div>
+              </div>
+            </div>
+          ))}
+
+          <div style={{marginTop:28,padding:14,borderRadius:10,background:'var(--ic-bg-2)',border:'1px solid var(--ic-line)'}}>
+            <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10,marginBottom:6}}>PROGRESO</div>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:8}}>
+              <span style={{fontWeight:600}}>33% completo</span>
+              <span style={{color:'var(--ic-text-2)'}}>2 / 6</span>
+            </div>
+            <div style={{height:4,background:'var(--ic-line)',borderRadius:2,overflow:'hidden'}}>
+              <div style={{width:'33%',height:'100%',background:'var(--ic-burgundy)'}}/>
+            </div>
+            <p style={{fontSize:11.5,color:'var(--ic-text-2)',margin:'10px 0 0',lineHeight:1.5}}>
+              Podés guardar como borrador en cualquier momento.
+            </p>
+          </div>
+        </aside>
+
+        {/* Main form */}
+        <main className="pub-main">
+          <div style={{maxWidth:780,marginBottom:24}}>
+            <div className="ic-eyebrow" style={{marginBottom:10}}>Nueva publicación</div>
+            <h1 style={{margin:0,fontSize:32,fontWeight:600,letterSpacing:'-.025em'}}>Publicá tu propiedad industrial</h1>
+            <p style={{color:'var(--ic-text-2)',fontSize:15,maxWidth:560,marginTop:12,lineHeight:1.55}}>
+              En 6 pasos completás todo. Nuestra IA te ayuda con sugerencias de precio basadas en comparables y proyección de la zona.
+            </p>
+          </div>
+
+          {/* Section 1 — Tipo */}
+          <div className="form-card" style={{marginBottom:20}}>
+            <div className="section-head">
+              <span className="num">01</span>
+              <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Tipo de propiedad</h3>
+            </div>
+            <p style={{margin:'4px 0 18px',fontSize:13,color:'var(--ic-text-2)'}}>Elegí la categoría que mejor describe la propiedad.</p>
+
+            <div className="type-grid">
+              {TYPES.map(T => (
+                <div key={T.id} className={"type-card " + (type===T.id?"on":"")} onClick={()=>setType(T.id)}>
+                  <div className="icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <path d={T.icon} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                  <div className="name">{T.name}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{marginTop:28}}>
+              <div className="ic-label">Modalidad</div>
+              <div className="mode-row">
+                {[
+                  { id:"venta", t:"Venta" },
+                  { id:"alquiler", t:"Alquiler" },
+                  { id:"pozo", t:"Inversión en pozo" },
+                  { id:"frac", t:"Fraccionada · co-inversión" },
+                ].map(m => (
+                  <div key={m.id} className={"mode-pill " + (mode===m.id?"on":"")} onClick={()=>setMode(m.id)}>
+                    <span className="dot"/>{m.t}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2 — Ubicación */}
+          <div className="form-card" style={{marginBottom:20}}>
+            <div className="section-head">
+              <span className="num">02</span>
+              <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Ubicación</h3>
+            </div>
+            <p style={{margin:'4px 0 18px',fontSize:13,color:'var(--ic-text-2)'}}>Movete por el mapa o ingresá la dirección. Arrastrá el pin para ajustar.</p>
+
+            <div className="field-row">
+              <div>
+                <label className="ic-label">Dirección</label>
+                <input className="ic-input" defaultValue="Av. Cabrera 4521 · Puerto Ing. White"/>
+              </div>
+              <div>
+                <label className="ic-label">Zona</label>
+                <select className="ic-select" defaultValue="white">
+                  <option value="white">Puerto Ing. White</option>
+                  <option value="parque">Parque Industrial</option>
+                  <option value="polo">Polo Petroquímico</option>
+                  <option value="carrin">La Carrindanga</option>
+                  <option value="cerri">General Cerri</option>
+                  <option value="cabildo">Cabildo Industrial</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="map-pick">
+              <svg viewBox="0 0 400 280" preserveAspectRatio="none">
+                <defs>
+                  <pattern id="grid-mp" width="20" height="20" patternUnits="userSpaceOnUse">
+                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,.05)" strokeWidth="1"/>
+                  </pattern>
+                </defs>
+                <rect width="400" height="280" fill="url(#grid-mp)"/>
+                <polygon points="180,80 320,75 330,170 195,180" fill="rgba(107,15,26,.20)" stroke="rgba(107,15,26,.4)"/>
+                <path d="M0,220 C100,210 180,235 280,220 C340,210 380,235 400,225 L400,280 L0,280 Z" fill="rgba(20,22,28,.55)"/>
+                <text x="240" y="120" fill="rgba(255,255,255,.5)" fontSize="9" fontFamily="Geist Mono">PUERTO ING. WHITE</text>
+              </svg>
+              <div className="pin-drop"><div className="head"/></div>
+              <div style={{position:'absolute',top:12,left:12,padding:'6px 10px',background:'rgba(20,22,28,.85)',color:'#fff',fontSize:11,borderRadius:6,fontFamily:'var(--ic-mono)',letterSpacing:'.06em'}}>
+                -38.7785, -62.2680
+              </div>
+            </div>
+
+            <div style={{marginTop:14,padding:14,background:'var(--ic-burgundy-tint)',borderRadius:10,display:'flex',gap:12,alignItems:'center'}}>
+              <span style={{fontFamily:'var(--ic-mono)',fontSize:10,letterSpacing:'.14em',color:'var(--ic-burgundy)'}}>IA</span>
+              <span style={{fontSize:13.5,color:'var(--ic-burgundy-ink)'}}>
+                Estás publicando en una zona con <b>+4.2% en 6 meses</b> y proyección <b>+22.4% a 36 meses</b>.
+              </span>
+            </div>
+          </div>
+
+          {/* Section 3 — Detalles técnicos */}
+          <div className="form-card" style={{marginBottom:20}}>
+            <div className="section-head">
+              <span className="num">03</span>
+              <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Detalles técnicos</h3>
+            </div>
+
+            <div className="field-row-3">
+              <div>
+                <label className="ic-label">Superficie cubierta (m²)</label>
+                <input className="ic-input ic-num" placeholder="1.800"/>
+              </div>
+              <div>
+                <label className="ic-label">Superficie terreno (m²)</label>
+                <input className="ic-input ic-num" placeholder="2.400"/>
+              </div>
+              <div>
+                <label className="ic-label">Altura libre (m)</label>
+                <input className="ic-input ic-num" placeholder="9"/>
+              </div>
+            </div>
+
+            <div className="field-row">
+              <div>
+                <label className="ic-label">Habilitación industrial</label>
+                <select className="ic-select"><option>Categoría B vigente</option><option>Categoría A</option><option>Sin habilitación</option></select>
+              </div>
+              <div>
+                <label className="ic-label">Antigüedad</label>
+                <input className="ic-input" placeholder="12 años"/>
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="ic-label">Accesos y servicios</label>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
+                {["Acceso camiones","Doble portón","Playa de maniobras","Luz trifásica","Agua de red","Gas natural","Fibra óptica","Cloacas","Oficinas adm."].map(s=>(
+                  <label key={s} className="toggle-cb on" style={{padding:'8px 0'}}>
+                    <span className="swc"/>{s}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4 — Precio */}
+          <div className="form-card" style={{marginBottom:20}}>
+            <div className="section-head">
+              <span className="num">04</span>
+              <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Precio</h3>
+            </div>
+
+            <div className="field-row">
+              <div>
+                <label className="ic-label">Precio (USD)</label>
+                <input className="ic-input ic-num" placeholder="680.000"/>
+              </div>
+              <div>
+                <label className="ic-label">Modalidad de pago</label>
+                <select className="ic-select"><option>Contado</option><option>Financiado</option><option>Permuta</option></select>
+              </div>
+            </div>
+
+            <div style={{padding:'16px 20px',background:'var(--ic-gold-tint)',borderRadius:10,border:'1px solid rgba(201,168,76,.35)'}}>
+              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                <span style={{width:6,height:6,borderRadius:'50%',background:'var(--ic-gold)',boxShadow:'0 0 0 3px rgba(201,168,76,.25)'}}/>
+                <span className="ic-mono" style={{color:'#74540a',fontSize:10}}>SUGERENCIA DE PRECIO · IA</span>
+              </div>
+              <div style={{fontSize:14,color:'#3a2a07',lineHeight:1.5}}>
+                Basado en 12 comparables recientes en Puerto Ing. White, el precio sugerido para una propiedad de 1.800 m² está entre <b>USD 640.000 — 720.000</b> (≈ USD 355 — 400/m²).
+              </div>
+            </div>
+          </div>
+
+          {/* Section 5 — Fotos */}
+          <div className="form-card" style={{marginBottom:20}}>
+            <div className="section-head">
+              <span className="num">05</span>
+              <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Fotos, planos y descripción</h3>
+            </div>
+
+            <div className="upload">
+              <div className="icon-big">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 16V8M8 12L12 8L16 12M20 16V19A2 2 0 0 1 18 21H6A2 2 0 0 1 4 19V16" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round"/></svg>
+              </div>
+              <div style={{fontSize:14,fontWeight:500}}>Arrastrá fotos o hacé click para subir</div>
+              <div style={{fontSize:12,color:'var(--ic-text-2)',marginTop:4}}>JPG, PNG · Hasta 25 fotos · 10 MB c/u</div>
+            </div>
+
+            <div className="photos-grid">
+              {[1,2,3].map(i=><div key={i} className="photo-mini"/>)}
+              <div className="photo-mini add">+</div>
+            </div>
+
+            <div className="field" style={{marginTop:22}}>
+              <label className="ic-label">Descripción</label>
+              <textarea className="ic-textarea" rows="5" placeholder="Describí la propiedad: estado, características, oportunidades, vecinos industriales..." style={{resize:'vertical'}}/>
+              <div style={{fontSize:11.5,color:'var(--ic-text-3)',marginTop:6,fontFamily:'var(--ic-mono)',letterSpacing:'.06em'}}>0 / 1.500 caracteres · La IA puede ayudarte a redactar →</div>
+            </div>
+          </div>
+
+          {/* Section 6 — Contacto y verificación */}
+          <div className="form-card" style={{marginBottom:20}}>
+            <div className="section-head">
+              <span className="num">06</span>
+              <h3 style={{margin:0,fontSize:17,fontWeight:600,letterSpacing:'-.015em'}}>Contacto y verificación</h3>
+            </div>
+
+            <div className="field-row">
+              <div>
+                <label className="ic-label">Teléfono de contacto</label>
+                <input className="ic-input" placeholder="+54 291 555 5555"/>
+              </div>
+              <div>
+                <label className="ic-label">Email</label>
+                <input className="ic-input" placeholder="contacto@email.com"/>
+              </div>
+            </div>
+
+            <div className="verif-card">
+              <div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'flex-start'}}>
+                <div>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                    <VerifiedBadge/>
+                    <span style={{fontSize:11,fontFamily:'var(--ic-mono)',color:'#74540a',letterSpacing:'.12em'}}>OBTÉ EL BADGE DE VENDEDOR VERIFICADO</span>
+                  </div>
+                  <h4 style={{margin:'4px 0 6px',fontSize:15,fontWeight:600,color:'#3a2a07'}}>Verificá tu identidad</h4>
+                  <p style={{margin:0,fontSize:13,color:'#5c4711',lineHeight:1.5,maxWidth:420}}>
+                    Subí tu DNI y un selfie. Validamos en menos de 24h y aparecés con el badge en toda la plataforma. Las publicaciones verificadas reciben <b>3× más consultas</b>.
+                  </p>
+                </div>
+                <button className="ic-btn" style={{background:'#3a2a07',color:'#fff'}} onClick={()=>setVerified(!verified)}>
+                  {verified ? 'En revisión...' : 'Verificarme'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div style={{display:'flex',gap:10,justifyContent:'flex-end',paddingTop:16}}>
+            <button className="ic-btn ic-btn-ghost">Guardar como borrador</button>
+            <button className="ic-btn ic-btn-secondary">← Atrás</button>
+            <button className="ic-btn ic-btn-primary ic-btn-lg">Publicar propiedad →</button>
+          </div>
+        </main>
+
+        {/* Live preview */}
+        <aside className="pub-preview">
+          <div className="ic-eyebrow" style={{marginBottom:12}}>Vista previa</div>
+          <h3 style={{margin:'0 0 14px',fontSize:14,fontWeight:600}}>Cómo se va a ver tu publicación</h3>
+
+          <div className="ic-card">
+            <div className="ic-photo" data-label="FOTO PRINCIPAL" style={{aspectRatio:'4/3'}}>
+              <div style={{position:'absolute',top:10,left:10,zIndex:2,display:'flex',gap:4}}>
+                <span className="ic-badge" style={{background:'rgba(255,255,255,.95)',fontSize:10}}>Galpón</span>
+                <span className="ic-badge" style={{background:'rgba(255,255,255,.95)',fontSize:10}}>VENTA</span>
+              </div>
+            </div>
+            <div style={{padding:14}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+                <span style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-2)',letterSpacing:'.14em'}}>GALPÓN</span>
+                <span style={{fontSize:10.5,fontFamily:'var(--ic-mono)',color:'var(--ic-text-3)',letterSpacing:'.14em'}}>1.800 m²</span>
+              </div>
+              <div style={{fontSize:14,fontWeight:600,lineHeight:1.3,marginBottom:4}}>Galpón industrial con acceso camiones</div>
+              <div style={{fontSize:12,color:'var(--ic-text-2)',marginBottom:12}}>Puerto Ing. White · Bahía Blanca</div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end'}}>
+                <div className="ic-num" style={{fontSize:17,fontWeight:600,letterSpacing:'-.02em'}}>USD 680.000</div>
+                <div style={{display:'flex',gap:4}}>
+                  <VerifiedBadge/>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{marginTop:22,padding:14,background:'#fff',borderRadius:10,border:'1px solid var(--ic-line)'}}>
+            <div className="ic-mono" style={{color:'var(--ic-text-2)',fontSize:10,marginBottom:8}}>SCORE DE PUBLICACIÓN · IA</div>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+              <span style={{fontSize:13,fontWeight:500}}>Completitud</span>
+              <span className="ic-num" style={{fontSize:13,fontWeight:600,color:'var(--ic-burgundy)'}}>72/100</span>
+            </div>
+            <div style={{height:4,background:'var(--ic-line)',borderRadius:2,overflow:'hidden',marginBottom:14}}>
+              <div style={{width:'72%',height:'100%',background:'var(--ic-burgundy)'}}/>
+            </div>
+            <ul style={{margin:0,padding:0,listStyle:'none',fontSize:12.5,lineHeight:1.6,color:'var(--ic-text)'}}>
+              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-success)'}}>✓</span> Tipo y modalidad</li>
+              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-success)'}}>✓</span> Ubicación geocodificada</li>
+              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-text-3)'}}>○</span> Subir 5+ fotos</li>
+              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-text-3)'}}>○</span> Subir planos</li>
+              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-text-3)'}}>○</span> Completar descripción</li>
+              <li style={{display:'flex',gap:8}}><span style={{color:'var(--ic-text-3)'}}>○</span> Verificar identidad</li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<PublishPage/>);
+window.addEventListener('load', () => mountTweaks({ showLogoVar:true, showHeroVar:false }));
+</script>
+</body>
+</html>
