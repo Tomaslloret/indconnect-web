@@ -5,15 +5,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 
 /* ─── Logo ─── */
 function Logo({ variant = 1, size = 28, withText = true, light = false }) {
-  const burg = "var(--ic-burgundy)", gold = "var(--ic-gold)";
-  const w = size, h = size;
-  const mark = (() => {
-    if (variant===1) return <svg width={w} height={h} viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="7" fill={burg}/><text x="14" y="20" textAnchor="middle" fontFamily="Geist, sans-serif" fontWeight="700" fontSize="14" letterSpacing="-0.04em" fill="#fff">IC</text></svg>;
-    if (variant===2) return <svg width={w} height={h} viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="7" fill={burg}/><rect x="22" y="4" width="2.5" height="20" rx="1.25" fill={gold}/><text x="13" y="20" textAnchor="middle" fontFamily="Geist, sans-serif" fontWeight="700" fontSize="14" letterSpacing="-0.04em" fill="#fff">IC</text></svg>;
-    if (variant===3) return <svg width={w} height={h} viewBox="0 0 28 28" fill="none"><rect x="1" y="1" width="26" height="26" rx="7" fill="#fff" stroke={burg} strokeWidth="1.5"/><text x="14" y="20" textAnchor="middle" fontFamily="Geist, sans-serif" fontWeight="700" fontSize="14" letterSpacing="-0.04em" fill={burg}>IC</text></svg>;
-    if (variant===4) return <svg width={w} height={h} viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="7" fill={burg}/><rect x="7" y="7" width="3" height="14" fill="#fff"/><path d="M22 9.2a6 6 0 1 0 0 9.6" stroke="#fff" strokeWidth="3" strokeLinecap="square" fill="none"/></svg>;
-    return <svg width={w} height={h} viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="7" fill={burg}/><rect x="3" y="3" width="22" height="22" rx="5" fill="none" stroke={gold} strokeWidth="1"/><text x="14" y="20" textAnchor="middle" fontFamily="Geist, sans-serif" fontWeight="700" fontSize="14" letterSpacing="-0.04em" fill="#fff">IC</text></svg>;
-  })();
+  const mark = <img src="logo-ic.jpg" width={size} height={size} alt="IC" style={{borderRadius: Math.round(size*0.25), objectFit:'cover', display:'block'}} />;
   return (
     <a href="index.html" style={{display:'inline-flex',alignItems:'center',gap:10,color:light?'#fff':'var(--ic-ink)'}}>
       {mark}
@@ -65,9 +57,7 @@ function AuthModal({ tab = 'login', onClose, onSuccess }) {
         </div>
         <div style={{padding:'28px 32px 32px'}}>
           <div style={{textAlign:'center',marginBottom:24}}>
-            <div style={{width:44,height:44,borderRadius:11,background:'var(--ic-burgundy)',display:'inline-flex',alignItems:'center',justifyContent:'center'}}>
-              <span style={{color:'#fff',fontWeight:700,fontSize:18,letterSpacing:'-.03em'}}>IC</span>
-            </div>
+            <img src="logo-ic.jpg" width={44} height={44} alt="IC" style={{borderRadius:11,objectFit:'cover',display:'inline-block'}} />
             <p style={{color:'var(--ic-text)',fontSize:14,marginTop:10,marginBottom:0}}>
               {activeTab==='login'?'Bienvenido de vuelta a IndConnect':'Creá tu cuenta en IndConnect'}
             </p>
